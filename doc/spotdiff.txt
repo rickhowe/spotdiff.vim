@@ -15,9 +15,10 @@ This plugin provides another `:diffthis` and `:diffoff` commands, which are
 `:Diffthis` and `:Diffoff`.
 
 You can use `:Diffthis` to select a block of lines and to make the current
-window diff mode. Other lines than selected will be hidden and highlighted
-with Conceal. When two separate windows become diff mode, `:Diffthis` shows
-their spot diffs in those windows without opening a new window and tab page.
+window diff mode. Other lines than selected will be highlighted with Conceal
+so that 'conceallevel' and 'concealcursor' options can be used to hide them.
+When two separate windows become diff mode, `:Diffthis` shows their spot diffs
+in those windows without opening a new window and tab page.
 
 Use `:Diffoff` to clear the selected block of lines and to reset diff mode
 for the current window. If `!` is specified, clear and reset for all windows
@@ -55,8 +56,8 @@ COMMAND                                               *spotdiff-command*
 CHANGE HISTORY                                         *spotdiff-history*
 
 Update : 1.1
-* `:Diffthis` hides and highlights other lines than selected with Conceal,
-  instead of showing selected lines with sign feature.
+* `:Diffthis` highlights other lines than selected with Conceal, instead of
+  showing selected lines with sign feature.
 * `:Diffthis` and `:Diffoff` try to repair any diff mode mismatch, instead of
   stopping with error messages.
 * The 'diffopt' foldcolumn:{n} option was ignored, but follows it as vim does.
