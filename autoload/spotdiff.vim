@@ -89,15 +89,9 @@ function! spotdiff#Diffthis(line1, line2)
 	unlet s:save_dex
 
 	" highlight other lines than selected with Conceal
-	let hl = exists('g:spotdiff_conceal') ? g:spotdiff_conceal : 'Conceal'
-	if exists('*matchaddpos')
-		let cl = range(1, rg[0]) + range(rg[1] + 2, line('$'))
-		let w:SDiff_Mid = map(range(0, len(cl) - 1, 8),
-			\'matchaddpos(hl, cl[v:val : v:val + 7], -100)')
-	else
-		let w:SDiff_Mid = [matchadd(hl, '\%<' . (rg[0] + 1) . 'l\|' .
-					\'\%>' . (rg[1] + 1) . 'l', -100)]
-	endif
+	let w:SDiff_Mid = matchadd(
+		\exists('g:spotdiff_conceal') ? g:spotdiff_conceal : 'Conceal',
+		\'\%<' . (rg[0] + 1) . 'l\|' . '\%>' . (rg[1] + 1) . 'l', -100)
 endfunction
 
 function! spotdiff#Diffoff(all)
@@ -120,9 +114,9 @@ function! spotdiff#Diffoff(all)
 		unlet t:SDiff[w:SDiff_ID]
 		unlet w:SDiff_ID
 		" reset highlight
-		let mx = map(getmatches(), 'v:val.id')
-		call map(filter(w:SDiff_Mid, 'index(mx, v:val) != -1'),
-						\'matchdelete(v:val)')
+		if index(map(getmatches(), 'v:val.id'), w:SDiff_Mid) != -1
+			call matchdelete(w:SDiff_Mid)
+		endif
 		unlet w:SDiff_Mid
 		" do diffoff
 		silent diffoff
