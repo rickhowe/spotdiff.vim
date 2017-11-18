@@ -1,6 +1,6 @@
 # spotdiff.vim
 
-##A range selectable diffthis to compare partially
+## A range selectable diffthis to compare partially
 
 ### Introduction
 
@@ -12,10 +12,11 @@ This plugin provides another `:diffthis` and `:diffoff` commands, which are
 `:Diffthis` and `:Diffoff`.
 
 You can use `:Diffthis` to select a block of lines and to make the current
-window diff mode. Other lines than selected will be highlighted with Conceal
-so that 'conceallevel' and 'concealcursor' options can be used to hide them.
-When two separate windows become diff mode, `:Diffthis` shows their spot diffs
-in those windows without opening a new window and tab page.
+window diff mode. The selected lines are all indicated with a '-' at the fold
+column. If `!` is specified, other lines than selected will be highlighted
+with Conceal so that 'conceallevel' and 'concealcursor' options can be used
+to hide them. When two separate windows become diff mode, `:Diffthis` shows
+their spot diffs in those windows without opening a new window and tab page.
 
 Use `:Diffoff` to clear the selected block of lines and to reset diff mode
 for the current window. If `!` is specified, clear and reset for all windows
@@ -37,11 +38,12 @@ you can see the exact differences.
 
 ### Command
 
-* `:[range]Diffthis`
+* `:[range]Diffthis[!]`
   * Select a block of lines with `[range]` and to make the current window
     diff mode. If `[range]` is not specified, the current line will be
-    selected. It is possible to select two blocks of lines in a single
-    window to see the differences between them.
+    selected. If `!` is specified, other lines than selected will be
+    highlighted with Conceal. It is possible to select two blocks of
+    lines in a single window to see the differences between them.
 
 * `:Diffoff[!]`
   * Clear the selected block of lines and reset diff mode for the current
