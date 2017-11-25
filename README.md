@@ -13,10 +13,11 @@ This plugin provides another `:diffthis` and `:diffoff` commands, which are
 
 You can use `:Diffthis` to select a block of lines and to make the current
 window diff mode. The selected lines are all indicated with a '-' at the fold
-column. If `!` is specified, other lines than selected will be highlighted
-with Conceal so that 'conceallevel' and 'concealcursor' options can be used
-to hide them. When two separate windows become diff mode, `:Diffthis` shows
-their spot diffs in those windows without opening a new window and tab page.
+column and also underlined using sign feature to make them more visible.
+If `!` is specified, other lines than selected will be highlighted with Conceal
+so that 'conceallevel' and 'concealcursor' options can be used to hide them.
+When two separate windows become diff mode, `:Diffthis` shows their spot diffs
+in those windows without opening a new window and tab page.
 
 Use `:Diffoff` to clear the selected block of lines and to reset diff mode
 for the current window. If `!` is specified, clear and reset for all windows

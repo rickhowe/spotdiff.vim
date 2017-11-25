@@ -1,7 +1,7 @@
 *spotdiff.vim* : A range selectable diffthis to compare partially
 
-Last Change: 2017/11/18
-Version:     2.0
+Last Change: 2017/11/25
+Version:     2.1
 Author:      Rick Howe <rdcxy754@ybb.ne.jp>
 
 -----------------------------------------------------------------------------
@@ -16,10 +16,11 @@ This plugin provides another `:diffthis` and `:diffoff` commands, which are
 
 You can use `:Diffthis` to select a block of lines and to make the current
 window diff mode. The selected lines are all indicated with a '-' at the fold
-column. If `!` is specified, other lines than selected will be highlighted
-with Conceal so that 'conceallevel' and 'concealcursor' options can be used
-to hide them. When two separate windows become diff mode, `:Diffthis` shows
-their spot diffs in those windows without opening a new window and tab page.
+column and also underlined using sign feature. If `!` is specified, other lines
+than selected will be highlighted with Conceal so that 'conceallevel' and
+'concealcursor' options can be used to hide them. When two separate windows
+become diff mode, `:Diffthis` shows their spot diffs in those windows without
+opening a new window and tab page.
 
 Use `:Diffoff` to clear the selected block of lines and to reset diff mode
 for the current window. If `!` is specified, clear and reset for all windows
@@ -57,10 +58,15 @@ COMMAND                                               *spotdiff-command*
 -----------------------------------------------------------------------------
 CHANGE HISTORY                                         *spotdiff-history*
 
+Update : 2.1
+* The selected lines are all underlined using sign feature, in addition to a
+  '-' in the fold column, to make them more visible.
+* Fixed some defects.
+
 Update : 2.0
 * `:Diffthis` indicates the selected lines with a '-' in the fold column.
 * `:Diffthis` always highlighted other lines than selected with Conceal, but
-  `!` becomes required.
+  `!` is required as optionally.
 
 Update : 1.1
 * `:Diffthis` highlights other lines than selected with Conceal, instead of

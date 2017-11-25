@@ -1,7 +1,7 @@
 " spotdiff.vim : A range selectable diffthis to compare partially
 "
-" Last Change: 2017/11/18
-" Version:     2.0
+" Last Change: 2017/11/25
+" Version:     2.1
 " Author:      Rick Howe <rdcxy754@ybb.ne.jp>
 
 let s:save_cpo = &cpoptions
@@ -34,40 +34,86 @@ function! spotdiff#Diffthis(line1, line2, conceal)
 			let [rg, cl] = [[1, a:line2 - a:line1 + 1] , 1]
 			" get selected text and original local options
 			let tx = getline(a:line1, a:line2)
-			let wo = getwinvar(winnr(), '&')
-			let bo = getbufvar(bufnr('%'), '&')
+			"if has('patch-7.4.2273')
+				"let wo = getwinvar(winnr(), '&', {})
+				"let bo = getbufvar(bufnr('%'), '&', {})
+			"else
+				let tn = tempname()
+				let save_vop = &viewoptions
+				let &viewoptions = 'options'
+				execute 'silent mkview ' . tn
+				let &viewoptions = save_vop
+				let lo = readfile(tn)
+				call delete(tn)
+			"endif
 			" try to create a clone window
+			if &l:wrap
+				let ww = winwidth(0) - (&l:foldcolumn +
+						\&l:numberwidth * (&l:relativenumber || &l:number))
+				let vl = 0
+				for l in range(a:line1, a:line2)
+					let vl += (virtcol([l, '$']) - 1) / ww + 1
+				endfor
+			else
+				let vl = len(tx)
+			endif
 			try
 				execute (sd.range[0] < a:line1 ? 'below ' : 'above ') .
-							\min([(winheight(0) - 1) / 2, len(tx)]) . 'new'
+									\min([(winheight(0) - 1) / 2, vl]) . 'new'
 			catch /^Vim(new):E36:/				" not enough room
 				echohl Error
 				echo substitute(v:exception, '^.\{-}:', '', '')
 				echohl None
 				return
 			endtry
-			" set the selected text and original local options
+			" set the selected text
 			call setline(1, tx)
-			call map(filter(wo, 'v:key != "diff"'),
-									\'setwinvar(winnr(), "&" . v:key, v:val)')
-			call map(bo, 'setbufvar(bufnr("%"), "&" . v:key, v:val)')
-			" set some specific local options
-			let &l:modifiable = 0
-			let &l:buftype = 'nofile'
 		endif
 	endif
 	" set SDiff dictionary in this window
-	let w:SDiff = {'id': id, 'range': rg, 'clone': cl, 'conceal': 0}
+	let w:SDiff = {'id': id, 'range': rg, 'clone': cl}
 	" set diffexpr to modify diff input/output files
 	let s:save_dex = &diffexpr
 	let &diffexpr = 's:SpotDiffExpr()'
 	silent diffthis
 	let &diffexpr = s:save_dex
 	unlet s:save_dex
+	if w:SDiff.clone
+		" set the original local options on the clone window after diffthis
+		"if has('patch-7.4.2273')
+			"call map(filter(wo, 'v:key != "diff"'),
+								"\'setwinvar(winnr(), "&" . v:key, v:val)')
+			"call map(bo, 'setbufvar(bufnr("%"), "&" . v:key, v:val)')
+		"else
+			execute join(filter(filter(lo, 'v:val =~ "^setlocal"'),
+										\'v:val != "setlocal diff"'), '|')
+		"endif
+		" set some specific local options
+		let &l:modifiable = 0
+		let &l:buftype = 'nofile'
+	endif
+	" place sign on selected lines
+	if s:sdline
+		if exists('+signcolumn')
+			redir => bs
+			execute 'silent sign place buffer=' . bufnr('%')
+			redir END
+			if empty(filter(split(bs, '\n'), 'v:val =~ "=.*=.*="'))
+				" if no sign exists in current buffer, hide signcolumn
+				let b:save_scl = &l:signcolumn
+				let &l:signcolumn = 'no'
+			endif
+		endif
+		let base = s:sdline * 100000 + bufnr('%') * 1000
+		for n in range(w:SDiff.range[0], w:SDiff.range[1])
+			execute 'silent sign place ' . (base + n) . ' line=' . n .
+									\' name=SDiffLine buffer=' . bufnr('%')
+		endfor
+	endif
 	" highlight other lines than selected with Conceal
 	if a:conceal && has('conceal')
 		let w:SDiff.conceal = matchadd('Conceal', '\%<' . w:SDiff.range[0] .
-								\'l\|' . '\%>' . w:SDiff.range[1] . 'l', -100)
+									\'l\|\%>' . w:SDiff.range[1] . 'l', -100)
 	endif
 	call s:ShowFoldSign()
 endfunction
@@ -86,24 +132,37 @@ function! spotdiff#Diffoff(all)
 	for w in sw
 		execute 'noautocmd ' . w . 'wincmd w'
 		silent diffoff
-		if w:SDiff.conceal
+		" reset sign
+		if s:sdline
+			let base = s:sdline * 100000 + winbufnr(w) * 1000
+			for n in range(w:SDiff.range[0], w:SDiff.range[1])
+				execute 'silent sign unplace ' . (base + n) .
+													\' buffer=' . winbufnr(w)
+			endfor
+			if exists('b:save_scl')
+				let &l:signcolumn = b:save_scl
+				unlet b:save_scl
+			endif
+		endif
+		" reset Conceal highlight
+		if has_key(w:SDiff, 'conceal')
 			if index(map(getmatches(), 'v:val.id'), w:SDiff.conceal) != -1
 				call matchdelete(w:SDiff.conceal)
 			endif
 		endif
 		" remember a clone window to quit later
-		if w:SDiff.clone | let cl = w | endif
+		if w:SDiff.clone | let clone = w | endif
 		unlet w:SDiff
 	endfor
 	execute 'noautocmd ' . cw . 'wincmd w'
 	if a:all | silent diffoff! | endif
 	call s:ToggleSpotDiff(0)
 	" quit the clone window
-	if exists('cl')
-		execute 'noautocmd ' . cl . 'wincmd w'
+	if exists('clone')
+		execute 'noautocmd ' . clone . 'wincmd w'
 		silent quit!
-		if cl < cw | let cw -= 1
-		elseif cl == cw | let cw = winnr()
+		if clone < cw | let cw -= 1
+		elseif clone == cw | let cw = winnr()
 		endif
 	endif
 	execute 'noautocmd ' . cw . 'wincmd w'
@@ -120,6 +179,7 @@ function! s:ShowFoldSign()
 		let &l:foldmethod = 'manual'
 		for l in range(w:SDiff.range[0], w:SDiff.range[1])
 			execute 'silent ' l . 'fold'
+			execute 'silent ' l . 'foldopen'
 		endfor
 	endfor
 	execute 'noautocmd ' . cw . 'wincmd w'
@@ -191,10 +251,12 @@ function! s:ClearSpotDiff()
 	" do Diffoff, return back to the current tabpage/window
 	let [ct, cw] = [tabpagenr(), winnr()]
 	for t in range(1, tabpagenr('$'))
-		for w in range(1, tabpagewinnr(t, '$'))
-			if winbufnr(w) == eval(expand('<abuf>'))
+		let bl = tabpagebuflist(t)
+		for n in range(len(bl))
+			if bl[n] == eval(expand('<abuf>')) &&
+								\!empty(gettabwinvar(t, n + 1, 'SDiff', {}))
 				execute 'noautocmd tabnext ' . t
-				execute 'noautocmd ' . w . 'wincmd w'
+				execute 'noautocmd ' . (n + 1) . 'wincmd w'
 				call spotdiff#Diffoff(0)
 			endif
 		endfor
@@ -219,10 +281,38 @@ function! s:ToggleSpotDiff(on)
 	augroup END
 	if a:on
 		" set event
-		autocmd spotdiff BufWinLeave * call s:ClearSpotDiff()
+		autocmd! spotdiff BufWinLeave,BufUnload * nested call s:ClearSpotDiff()
+		" define sign
+		let s:sdline = 0
+		if has('signs')
+			"let at = join(filter(split(get(g:, 'SDiffLineAttr', 'underline'),
+											"\','), 'v:val !~ "NONE"'), ',')
+			let at = 'underline'
+			"if !empty(at)
+				execute 'autocmd! spotdiff ColorScheme * silent hi
+					\ sdSelectLine term=' . at . ' cterm=' .at . ' gui=' . at
+				"try
+					doautocmd spotdiff ColorScheme
+				"catch /^Vim(highlight):E418:/
+					"echohl Error
+					"echo substitute(v:exception, '^.\{-}:', '', '')
+					"echohl None
+					"autocmd! spotdiff ColorScheme
+					"return
+				"endtry
+				silent sign define SDiffLine linehl=sdSelectLine
+				let s:sdline = localtime() % 99 + 1
+			"endif
+		endif
 	else
 		" remove event group
 		augroup! spotdiff
+		" undefine sign
+		if s:sdline
+			silent hi clear sdSelectLine
+			silent! sign undefine SDiffLine
+			unlet s:sdline
+		endif
 	endif
 endfunction
 

@@ -1,13 +1,13 @@
 " spotdiff.vim : A range selectable diffthis to compare partially
 "
-" Last Change: 2017/11/18
-" Version:     2.0
+" Last Change: 2017/11/25
+" Version:     2.1
 " Author:      Rick Howe <rdcxy754@ybb.ne.jp>
 
 if exists('g:loaded_spotdiff') || !has('diff') || v:version < 704
 	finish
 endif
-let g:loaded_spotdiff = 2.0
+let g:loaded_spotdiff = 2.1
 
 let s:save_cpo = &cpoptions
 set cpo&vim
