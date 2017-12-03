@@ -1,7 +1,7 @@
 " spotdiff.vim : A range selectable diffthis to compare partially
 "
-" Last Change: 2017/11/25
-" Version:     2.1
+" Last Change: 2017/12/03
+" Version:     2.2
 " Author:      Rick Howe <rdcxy754@ybb.ne.jp>
 
 let s:save_cpo = &cpoptions
@@ -66,8 +66,22 @@ function! spotdiff#Diffthis(line1, line2, conceal)
 				echohl None
 				return
 			endtry
-			" set the selected text
+			" set the selected text and original local options
 			call setline(1, tx)
+			"if has('patch-7.4.2273')
+				"call map(filter(wo, 'v:key != "diff"'),
+								"\'setwinvar(winnr(), "&" . v:key, v:val)')
+				"call map(bo, 'setbufvar(bufnr("%"), "&" . v:key, v:val)')
+			"else
+				execute join(filter(lo,
+							\'v:val =~ "^setlocal" && v:val !~ "diff$"'), '|')
+			"endif
+			" set some specific local options
+			let &l:modifiable = 0
+			let &l:buftype = 'nofile'
+			let &l:bufhidden = 'wipe'
+			let &l:buflisted = 0
+			let &l:swapfile = 0
 		endif
 	endif
 	" set SDiff dictionary in this window
@@ -79,18 +93,12 @@ function! spotdiff#Diffthis(line1, line2, conceal)
 	let &diffexpr = s:save_dex
 	unlet s:save_dex
 	if w:SDiff.clone
-		" set the original local options on the clone window after diffthis
+		" set back the original wrap option in a clone window
 		"if has('patch-7.4.2273')
-			"call map(filter(wo, 'v:key != "diff"'),
-								"\'setwinvar(winnr(), "&" . v:key, v:val)')
-			"call map(bo, 'setbufvar(bufnr("%"), "&" . v:key, v:val)')
+			"let &l:wrap = wo.wrap
 		"else
-			execute join(filter(filter(lo, 'v:val =~ "^setlocal"'),
-										\'v:val != "setlocal diff"'), '|')
+			let &l:wrap = (index(lo, 'setlocal wrap') != -1)
 		"endif
-		" set some specific local options
-		let &l:modifiable = 0
-		let &l:buftype = 'nofile'
 	endif
 	" place sign on selected lines
 	if s:sdline
@@ -101,7 +109,9 @@ function! spotdiff#Diffthis(line1, line2, conceal)
 			if empty(filter(split(bs, '\n'), 'v:val =~ "=.*=.*="'))
 				" if no sign exists in current buffer, hide signcolumn
 				let b:save_scl = &l:signcolumn
-				let &l:signcolumn = 'no'
+				call map(filter(range(1, winnr('$')),
+								\'winbufnr(v:val) == bufnr("%")'),
+									\'setwinvar(v:val, "&signcolumn", "no")')
 			endif
 		endif
 		let base = s:sdline * 100000 + bufnr('%') * 1000
@@ -140,7 +150,9 @@ function! spotdiff#Diffoff(all)
 													\' buffer=' . winbufnr(w)
 			endfor
 			if exists('b:save_scl')
-				let &l:signcolumn = b:save_scl
+				call map(filter(range(1, winnr('$')),
+						\'winbufnr(v:val) == bufnr("%")'),
+							\'setwinvar(v:val, "&signcolumn", b:save_scl)')
 				unlet b:save_scl
 			endif
 		endif
@@ -166,6 +178,16 @@ function! spotdiff#Diffoff(all)
 		endif
 	endif
 	execute 'noautocmd ' . cw . 'wincmd w'
+	call s:ShowFoldSign()
+endfunction
+
+function! spotdiff#Diffupdate(reload)
+	call s:RepairSpotDiff()
+	let s:save_dex = &diffexpr
+	let &diffexpr = 's:SpotDiffExpr()'
+	execute 'silent diffupdate' . (a:reload ? '!' : '')
+	let &diffexpr = s:save_dex
+	unlet s:save_dex
 	call s:ShowFoldSign()
 endfunction
 
