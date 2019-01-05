@@ -30,7 +30,8 @@ This plugin also makes it possible to select two blocks of lines in a single
 window, to see the differences between them within one file. `:Diffthis`
 tries to open a temporary new window above or below of the current one,
 copies secondly selected lines to it, and makes spot diffs with source window.
-This temporary window will be closed when `:Diffoff` is used on it.
+This temporary window will be closed when `:Diffoff` is used on it and on the
+original window.
 
 This plugin tries to repair any diff mode mismatch, but please do not use
 vim original diff commands together with this plugin's ones to prevent any

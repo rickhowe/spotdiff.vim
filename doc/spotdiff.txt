@@ -1,8 +1,9 @@
-*spotdiff.vim* : A range selectable diffthis to compare partially
+*spotdiff.vim*  A range selectable diffthis to compare partially
 
-Last Change: 2017/12/03
-Version:     2.2
-Author:      Rick Howe <rdcxy754@ybb.ne.jp>
+Last Change:	2019/01/05
+Version:	3.0
+Author:		Rick Howe <rdcxy754@ybb.ne.jp>
+Copyright:	(c) 2014-2019 by Rick Howe
 
 -----------------------------------------------------------------------------
 INTRODUCTION                                           *spotdiff*
@@ -33,7 +34,8 @@ This plugin also makes it possible to select two blocks of lines in a single
 window, to see the differences between them within one file. `:Diffthis`
 tries to open a temporary new window above or below of the current one,
 copies secondly selected lines to it, and makes spot diffs with source window.
-This temporary window will be closed when `:Diffoff` is used on it.
+This temporary window will be closed when `:Diffoff` is used on it and on the
+original window.
 
 This plugin tries to repair any diff mode mismatch, but please do not use
 vim original diff commands together with this plugin's ones to prevent any
@@ -64,6 +66,16 @@ COMMAND                                               *spotdiff-command*
 
 -----------------------------------------------------------------------------
 CHANGE HISTORY                                         *spotdiff-history*
+
+Update : 3.0
+* Disable a new internal diff in 'diffopt' option (patch-8.1.360) to prevent
+  unselected lines to be incorrectly diff'ed. And make this plugin work well
+  even if an external diff command is not available.
+* Open a temporary window, when `:Diffthis` is used twice in a single window,
+  highly enough to display all selected lines. And close it when `:Diffoff` is
+  used not only in it but also in the original window.
+* Support new iwhiteall and iwhiteeol of 'diffopt' option.
+* Removed a support for vim version 7.x.
 
 Update : 2.2
 * Added `:Diffupdate` command.
