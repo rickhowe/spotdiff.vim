@@ -1,7 +1,7 @@
 " spotdiff.vim : A range selectable diffthis to compare partially
 "
-" Last Change:	2019/01/05
-" Version:		3.0
+" Last Change:	2019/01/09
+" Version:		3.1
 " Author:		Rick Howe <rdcxy754@ybb.ne.jp>
 " Copyright:	(c) 2014-2019 by Rick Howe
 
@@ -18,6 +18,7 @@ function! spotdiff#Diffthis(line1, line2, conceal)
 		echohl None
 		return
 	endif
+	call s:ToggleDiffexpr(1)
 	call s:ToggleSpotDiff(1)
 	if empty(sw)
 		" the first valid Diffthis
@@ -63,12 +64,7 @@ function! spotdiff#Diffthis(line1, line2, conceal)
 	endif
 	" set SDiff dictionary in this window
 	let w:SDiff = {'id': id, 'range': rg, 'clone': cl}
-	" set diffexpr to modify diff input/output files
-	let s:save_dex = &diffexpr
-	let &diffexpr = 's:SpotDiffExpr()'
 	silent diffthis
-	let &diffexpr = s:save_dex
-	unlet s:save_dex
 	if w:SDiff.clone
 		" copy original local options
 		call map(wo, 'setwinvar(win_getid(), "&" . v:key, v:val)')
@@ -202,16 +198,13 @@ function! spotdiff#Diffoff(all)
 	noautocmd call win_gotoid(cw)
 	if a:all | silent diffoff! | endif
 	call s:ToggleSpotDiff(0)
+	call s:ToggleDiffexpr(0)
 	call s:ShowFoldSign()
 endfunction
 
 function! spotdiff#Diffupdate(reload)
 	call s:RepairSpotDiff()
-	let s:save_dex = &diffexpr
-	let &diffexpr = 's:SpotDiffExpr()'
 	execute 'silent diffupdate' . (a:reload ? '!' : '')
-	let &diffexpr = s:save_dex
-	unlet s:save_dex
 	call s:ShowFoldSign()
 endfunction
 
@@ -392,8 +385,27 @@ function! s:ClearSpotDiff()
 	call s:ShowFoldSign()
 endfunction
 
+function! s:ToggleDiffexpr(on)
+	let ns = empty(filter(gettabinfo(tabpagenr())[0].windows,
+									\'!empty(getwinvar(v:val, "SDiff", {}))'))
+	if a:on == 1 && ns || a:on == -1 && !ns
+		if !exists('s:save_dex')
+			" set a specific spotdiff expr to diffexpr
+			let s:save_dex = &diffexpr
+			let &diffexpr = 's:SpotDiffExpr()'
+		endif
+	elseif a:on == 0 && ns || a:on == -1 && ns
+		if exists('s:save_dex')
+			" restore original diffexpr
+			let &diffexpr = s:save_dex
+			unlet s:save_dex
+		endif
+	endif
+endfunction
+
 function! s:ToggleSpotDiff(on)
 	if len(filter(getwininfo(), 'has_key(v:val.variables, "SDiff")')) > 0
+		" do nothing if a SDiff is still set in some window
 		return
 	endif
 	" initialize event group
@@ -403,6 +415,7 @@ function! s:ToggleSpotDiff(on)
 	if a:on
 		" set event
 		autocmd! spotdiff BufWinLeave,BufUnload * nested call s:ClearSpotDiff()
+		autocmd! spotdiff TabEnter * call s:ToggleDiffexpr(-1)
 		" define sign
 		if has('signs')
 			let at = 'underline'
@@ -411,11 +424,6 @@ function! s:ToggleSpotDiff(on)
 			doautocmd spotdiff ColorScheme
 			silent sign define SpotDiff linehl=sdSelectLine
 		endif
-		" remove internal from diffopt to prevent all lines to be diff'ed
-		if &diffopt =~ 'internal'
-			set diffopt-=internal
-			let s:int_dip = 1
-		endif
 	else
 		" remove event group
 		augroup! spotdiff
@@ -423,11 +431,6 @@ function! s:ToggleSpotDiff(on)
 		if has('signs')
 			silent hi clear sdSelectLine
 			silent! sign undefine SpotDiff
-		endif
-		" restore internal to diffopt
-		if exists('s:int_dip')
-			set diffopt+=internal
-			unlet s:int_dip
 		endif
 	endif
 endfunction

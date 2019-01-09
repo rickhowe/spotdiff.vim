@@ -1,7 +1,7 @@
 *spotdiff.vim*  A range selectable diffthis to compare partially
 
-Last Change:	2019/01/05
-Version:	3.0
+Last Change:	2019/01/09
+Version:	3.1
 Author:		Rick Howe <rdcxy754@ybb.ne.jp>
 Copyright:	(c) 2014-2019 by Rick Howe
 
@@ -66,6 +66,10 @@ COMMAND                                               *spotdiff-command*
 
 -----------------------------------------------------------------------------
 CHANGE HISTORY                                         *spotdiff-history*
+
+Update : 3.1
+* Set a plugin specific expression to 'diffexpr' option while spot diff'ed to
+  disable a new internal diff (patch-8.1.360).
 
 Update : 3.0
 * Disable a new internal diff in 'diffopt' option (patch-8.1.360) to prevent
