@@ -12,12 +12,11 @@ This plugin provides `:Diffthis`, `:Diffoff` and `:Diffupdate` commands, which
 are alternative to vim original `:diffthis`, `:diffoff` and `:diffupdate`.
 
 You can use `:Diffthis` to select a block of lines and to make the current
-window diff mode. The selected lines are all indicated with a '-' at the fold
-column and also underlined using sign feature to make them more visible.
-If `!` is specified, other lines than selected will be highlighted with Conceal
-so that 'conceallevel' and 'concealcursor' options can be used to hide them.
-When two separate windows become diff mode, `:Diffthis` shows their spot diffs
-in those windows without opening a new window and tab page.
+window diff mode. The selected lines are all indicated with `hl-CursorLine`
+using sign feature to make them more visible. If `!` is specified, other lines
+than selected will be highlighted with `hl-Conceal` so that 'conceallevel' and
+'concealcursor' options can be used to hide them. When two separate windows
+become diff mode, `:Diffthis` shows their spot diffs in their windows.
 
 Use `:Diffoff` to clear the selected block of lines and to reset diff mode
 for the current window. If `!` is specified, clear and reset for all windows
@@ -27,9 +26,9 @@ in the current tab page.
 selected block of lines. If `!` is specified, the file is reloaded if necessary.
 
 This plugin also makes it possible to select two blocks of lines in a single
-window, to see the differences between them within one file. `:Diffthis`
-tries to open a temporary new window above or below of the current one,
-copies secondly selected lines to it, and makes spot diffs with source window.
+window, to see the differences between them within one file. `:Diffthis` tries
+to open a temporary new window above or below of the current one, copies
+secondly selected lines to it, and makes spot diffs with source window.
 This temporary window will be closed when `:Diffoff` is used on it and on the
 original window.
 
@@ -38,8 +37,8 @@ vim original diff commands together with this plugin's ones to prevent any
 errors and troubles. Try `:Diffoff!` to reset all in the case.
 
 It is recommended to install **diffchar.vim** plugin
-(https://github.com/rickhowe/diffchar.vim) so that
-you can see the exact differences.
+(https://github.com/rickhowe/diffchar.vim) so that you can see the exact
+differences.
 
 ### Command
 
@@ -47,7 +46,7 @@ you can see the exact differences.
   * Select a block of lines with `[range]` and to make the current window
     diff mode. If `[range]` is not specified, the current line will be
     selected. If `!` is specified, other lines than selected will be
-    highlighted with Conceal. It is possible to select two blocks of
+    highlighted with `hl-Conceal`. It is possible to select two blocks of
     lines in a single window to see the differences between them.
 
 * `:Diffoff[!]`
