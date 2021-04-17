@@ -1,70 +1,109 @@
-*spotdiff.vim*  A range selectable diffthis to compare partially
+*spotdiff.vim*  A range and area selectable diffthis to compare partially
 
-Last Change:	2019/08/28
-Version:	3.2
+Last Change:	2021/04/17
+Version:	4.0
 Author:		Rick Howe <rdcxy754@ybb.ne.jp>
-Copyright:	(c) 2014-2019 by Rick Howe
+Copyright:	(c) 2014-2021 by Rick Howe
 
 -----------------------------------------------------------------------------
 INTRODUCTION                                           *spotdiff*
 
-This plugin has been developed in order to make diff mode more useful.
-Vim always shows a diff for all lines of a window. But this plugin allows
-to specify the range and then partially make a spot diff.
+Vim provides diff mode which is useful to see differences between windows.
+However, it always shows the differences for entire line. And can not compare
+a sequence of words within a line, and sentences and paragraphs which are
+separated into several lines.
 
-This plugin provides `:Diffthis`, `:Diffoff` and `:Diffupdate` commands, which
-are alternative to vim original `:diffthis`, `:diffoff` and `:diffupdate`.
+To compare partially everywhere in windows, this plugin provides two groups of
+commands, which are alternative to vim original `:diffthis`, `:diffoff`, and
+`:diffupdate`. One is for which allows to select a range of lines to be
+compared in diff mode. Another is for which allows to select the Visual area
+to be compared in non-diff normal mode. Both work independently in a tab page.
 
-You can use `:Diffthis` to select a block of lines and to make the current
-window diff mode. The selected lines are all indicated with |hl-CursorLine|
-using sign feature to make them more visible. If `!` is specified, other lines
-than selected will be highlighted with |hl-Conceal| so that 'conceallevel' and
-'concealcursor' options can be used to hide them. When two separate windows
-become diff mode, `:Diffthis` shows their spot diffs in their windows.
-
-Use `:Diffoff` to clear the selected block of lines and to reset diff mode
-for the current window. If `!` is specified, clear and reset for all windows
-in the current tab page.
-
-`:Diffupdate` works like `:diffupdate` but updates the differences only for the
-selected block of lines. If `!` is specified, the file is reloaded if necessary.
-
-This plugin also makes it possible to select two blocks of lines in a single
-window, to see the differences between them within one file. `:Diffthis` tries
-to open a temporary new window above or below of the current one, copies
-secondly selected lines to it, and makes spot diffs with source window.
-This temporary window will be closed when `:Diffoff` is used on it and on the
-original window.
-
-This plugin tries to repair any diff mode mismatch, but please do not use
-vim original diff commands together with this plugin's ones to prevent any
-errors and troubles. Try `:Diffoff!` to reset all in the case.
+Do not use vim original diff commands together with this plugin's ones to
+prevent any errors and troubles.
 
 It is recommended to install |diffchar.vim| plugin
 (https://github.com/rickhowe/diffchar.vim) so that you can see the exact
 differences.
 
 -----------------------------------------------------------------------------
-COMMAND                                               *spotdiff-command*
+Selecting A Range Of Lines                             *spotdiff-range*
 
-:[range]Diffthis[!]
-	Select a block of lines with [range] and to make the current window
-	diff mode. If [range] is not specified, the current line will be
-	selected. If `!` is specified, other lines than selected will be
-	highlighted with |hl-Conceal|. It is possible to select two blocks of
-	lines in a single window to see the differences between them.
+There are `:Diffthis`, `:Diffoff`, and `:Diffupdate` commands available.
+
+:[range]Diffthis
+	Select a range of lines with [range] and make the current window diff
+	mode. If [range] is not specified, the current line will be selected.
+	The selected lines are highlighted in |hl-CursorColumn|. When two
+	separate windows become diff mode, `:Diffthis` shows the differences
+	for selected lines in each window. It is possible to select two ranges
+	of lines in the same window. `:Diffthis` opens a temporary new window
+	above or below of the current one, copies selected lines to it, and
+	shows the difference with source window.
 
 :Diffoff[!]
-	Clear the selected block of lines and reset diff mode for the current
-	window. If `!` is specified, clear and reset for all windows in the
-	current tab page.
+	Clear the selected range of lines and reset diff mode for the current
+	window. If `!` flag is specified, clear and reset for all windows in the
+	current tab page. The temporary window created by `:Diffthis` will be
+	closed when its original window is cleared.
 
 :Diffupdate[!]
-	Update the differences for the selected block of lines. If `!` is
+	Update the differences for the selected range of lines. If `!` flag is
 	specified, the file is reloaded if necessary.
 
 -----------------------------------------------------------------------------
+Selecting the Visual area                              *spotdiff-area*
+
+There are `:VDiffthis`, `:VDiffoff`, and `:VDiffupdate` commands available.
+Note that they work in non-diff normal mode.
+
+:[range]VDiffthis[!]
+	Select the last characterwise, linewise, or blockwise Visual area in
+	the current window. If [range] is different from the last Visual area,
+	it is selected as linewise Visual area. The selected area is
+	highlighted in |hl-DiffChange| with "italic", and then will be
+	compared as a single combined line. But if `!` flag is specified, each
+	line is separately compared, which would be useful particular for
+	columns in a table on blockwise area. Redundant lines in the
+	line-by-line comparison are shown with "strikethrough". Shortly after
+	the two area are selected, `:VDiffthis` compares them based on the
+	|g:DiffUnit| option and "icase", "iwhite", "iwhiteall" and "iwhiteeol"
+	flags in the 'diffopt' option. Then their differences are shown using
+	the |g:DiffColors| option. It is possible to select two Visual area in
+	the same window.
+
+	|g:DiffUnit|, |t:DiffUnit|
+	    A type of difference unit
+		'Char'   : any single character
+		'Word1'  : \w\+ word and any \W single character (default)
+		'Word2'  : non-space and space words
+		'Word3'  : \< or \> character class boundaries
+
+	|g:DiffColors|, |t:DiffColors|
+	    Matching colors for changed units (|hl-DiffAdd| for added units)
+		0   : |hl-DiffText| (default)
+		1   : |hl-DiffText| + up to 3 other highlights
+		2   : |hl-DiffText| + up to 7 other highlights
+		3   : |hl-DiffText| + up to 15 other highlights
+
+:VDiffoff[!]
+	Clear the selected area in the current window and reset its
+	differences. If `!` flag is specified, clear and reset all area in the
+	current tab page.
+
+:VDiffupdate
+	Compare the selected area again and show their differences in the
+	current tab page, when you make changes to the selected area or you
+	want to change |g:DiffUnit| or |g:DiffColors| option.
+
+-----------------------------------------------------------------------------
 CHANGE HISTORY                                         *spotdiff-history*
+
+Update : 4.0
+* Added `:VDiffthis`, `:VDiffoff`, and `:VDiffupdate` commands to select the
+  Visual area to be compared as a single combined line or multiple separate
+  lines.
+* Removed to use Conceal and Sign features in `:Diffthis` command.
 
 Update : 3.2
 * Changed to use |hl-CursorLine|, instead of underline and '-' in the fold
