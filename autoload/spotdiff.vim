@@ -1,7 +1,7 @@
-" spotdiff.vim : A range and area selectable diffthis to compare partially
+" spotdiff.vim : A range and area selectable :diffthis to compare partially
 "
-" Last Change:	2021/04/17
-" Version:		4.0
+" Last Change:	2021/06/08
+" Version:		4.1
 " Author:		Rick Howe <rdcxy754@ybb.ne.jp>
 " Copyright:	(c) 2014-2021 by Rick Howe
 
@@ -11,15 +11,14 @@ set cpo&vim
 " --------------------------------------
 " A Range of Lines SpotDiff
 " --------------------------------------
+let s:RSD = 'r_spotdiff'
 
 function! spotdiff#Diffthis(sl, el) abort
 	if !exists('t:RSDiff') | let t:RSDiff = {}
 	elseif 2 <= len(t:RSDiff)
-		call execute(['echohl Error', 'echo "2 area already selected
-									\ in this tab page!"', 'echohl None'], '')
+		call s:EchoError('2 area already selected in this tab page!')
 		return
 	endif
-	call s:RS_RepairDiff()
 	let cw = win_getid() | let cb = winbufnr(cw)
 	let [k, j] = has_key(t:RSDiff, 1) ? [2, 1] : [1, 2]
 	if empty(t:RSDiff) || t:RSDiff[j].bnr != cb
@@ -59,6 +58,7 @@ function! spotdiff#Diffthis(sl, el) abort
 		let t:RSDiff[k] = {'wid': win_getid(), 'bnr': bufnr('%'),
 									\'sel': [1, a:el - a:sl + 1], 'cln': cw}
 	endif
+	call s:RS_ToggleSelHL(1, k)
 	call s:RS_DoDiff(1)
 	if has_key(t:RSDiff[k], 'cln')
 		call map(wo, 'setwinvar(t:RSDiff[k].wid, "&" . v:key, v:val)')
@@ -81,12 +81,10 @@ function! spotdiff#Diffthis(sl, el) abort
 		if xh != 0 | call execute('resize ' . min([ch + xh, mh])) | endif
 	endif
 	call s:RS_ToggleEvent(1)
-	call s:RS_ToggleSelHL(1, k)
 endfunction
 
 function! spotdiff#Diffoff(all) abort
 	if !exists('t:RSDiff') | return | endif
-	call s:RS_RepairDiff()
 	let cw = win_getid()
 	let sk = keys(t:RSDiff)
 	if !a:all
@@ -110,7 +108,6 @@ function! spotdiff#Diffoff(all) abort
 	if empty(t:RSDiff) | unlet t:RSDiff | endif
 	noautocmd call win_gotoid(cw)
 	if a:all | call execute('diffoff!') | endif
-	call s:RS_ToggleEvent(0)
 	if exists('qw')
 		" finally quit clone window and then restore winfix options
 		call execute((exists('#diffchar#CursorHold') ?
@@ -125,15 +122,41 @@ function! spotdiff#Diffoff(all) abort
 			endif
 		endfor
 	endif
+	call s:RS_ToggleEvent(0)
 endfunction
 
-function! spotdiff#Diffupdate(reload) abort
-	if !exists('t:RSDiff') | return | endif
-	call s:RS_RepairDiff()
-	call execute('diffupdate' . (a:reload ? '!' : ''))
+function! spotdiff#Diffupdate() abort
+	if !exists('t:RSDiff') || len(t:RSDiff) != 2 | return | endif
+	call execute('diffoff!')
+	let cw = win_getid()
+	for k in [1, 2]
+		noautocmd call win_gotoid(t:RSDiff[k].wid)
+		call execute('diffthis')
+	endfor
+	noautocmd call win_gotoid(cw)
 endfunction
 
-function! spotdiff#Diffexpr() abort
+function! s:RS_DoDiff(on) abort
+	call s:RS_ToggleDiffexpr(a:on)
+	call execute(a:on ? 'diffthis' : 'diffoff')
+endfunction
+
+function! s:RS_ToggleDiffexpr(on)
+	let rd = exists('t:RSDiff') && len(t:RSDiff) == 2
+	if a:on == 1 && rd || a:on == -1 && rd
+		if !exists('s:save_dex')
+			let s:save_dex = &diffexpr
+			let &diffexpr = '<SID>RS_Diffexpr()'
+		endif
+	elseif a:on == 0 && rd || a:on == -1 && !rd
+		if exists('s:save_dex')
+			let &diffexpr = s:save_dex
+			unlet s:save_dex
+		endif
+	endif
+endfunction
+
+function! s:RS_Diffexpr() abort
 	for n in ['in', 'new'] | let f_{n} = readfile(v:fname_{n}) | endfor
 	if f_in == ['line1'] && f_new == ['line2']
 		call writefile(['1c1'], v:fname_out)
@@ -142,7 +165,6 @@ function! spotdiff#Diffexpr() abort
 	for [k, n] in [[1, 'in'], [2, 'new']]
 		let f_{n} = f_{n}[t:RSDiff[k].sel[0] - 1 : t:RSDiff[k].sel[1] - 1]
 	endfor
-	" use builtin function
 	let do = split(&diffopt, ',')
 	let save_igc = &ignorecase
 	let &ignorecase = (index(do, 'icase') != -1)
@@ -172,7 +194,6 @@ function! spotdiff#Diffexpr() abort
 	endfor
 	let &ignorecase = save_igc
 	call filter(f_out, 'v:val[0] !~ "[<>-]"')
-	" modify the line number of diff operations in output file
 	for n in range(len(f_out))
 		let [se1, op, se2] = split(substitute(f_out[n], '[acd]', ' & ', ''))
 		for k in [1, 2]
@@ -184,26 +205,6 @@ function! spotdiff#Diffexpr() abort
 	call writefile(f_out, v:fname_out)
 endfunction
 
-function! s:RS_DoDiff(on) abort
-	call s:RS_ToggleDiffexpr(a:on)
-	call execute(a:on ? 'diffthis' : 'diffoff')
-endfunction
-
-function! s:RS_RepairDiff() abort
-	" try to repair any diff mode mismatch in the current tab page
-	let cw = win_getid()
-	let sw = map(keys(t:RSDiff), 't:RSDiff[v:val].wid')
-	for w in gettabinfo(tabpagenr())[0].windows
-		let sd = [index(sw, w) != -1, getwinvar(w, '&l:diff')]
-		let do = (sd == [1, 0]) ? 'diffthis' : (sd == [0, 1]) ? 'diffoff' : ''
-		if !empty(do)
-			noautocmd call win_gotoid(w)
-			call execute(do)
-		endif
-	endfor
-	noautocmd call win_gotoid(cw)
-endfunction
-
 function! s:RS_ClearDiff(wid) abort
 	let cw = win_getid()
 	noautocmd call win_gotoid(a:wid)
@@ -212,88 +213,154 @@ function! s:RS_ClearDiff(wid) abort
 endfunction
 
 function! s:RS_ToggleEvent(on) abort
-	let sd = 'r_spotdiff'
 	let tv = filter(map(range(1, tabpagenr('$')),
 							\'gettabvar(v:val, "RSDiff")'), '!empty(v:val)')
-	call execute(['augroup ' . sd, 'autocmd!', 'augroup END'])
-	let an = 0
-	for tb in tv
-		for k in keys(tb)
-			call execute('autocmd! ' . sd . ' BufWinLeave <buffer=' .
-					\tb[k].bnr . '> call s:RS_ClearDiff(' . tb[k].wid . ')')
-			call execute('autocmd! ' . sd . ' TabEnter *
-											\ call s:RS_ToggleDiffexpr(-1)')
-			let an += 1
-		endfor
-	endfor
-	if an == 0 | call execute('augroup! ' . sd) | endif
-endfunction
-
-function! s:RS_ToggleDiffexpr(on)
-	let rd = exists('t:RSDiff') && len(t:RSDiff) == 2
-	if a:on == 1 && rd || a:on == -1 && rd
-		if !exists('s:save_dex')
-			let s:save_dex = &diffexpr
-			let &diffexpr = 'spotdiff#Diffexpr()'
-		endif
-	elseif a:on == 0 && rd || a:on == -1 && !rd
-		if exists('s:save_dex')
-			let &diffexpr = s:save_dex
-			unlet s:save_dex
-		endif
-	endif
-endfunction
-
-function! s:RS_ToggleSelHL(on, k) abort
-	if a:on
-		let t:RSDiff[a:k].lid = s:Matchaddpos('CursorColumn',
-						\range(t:RSDiff[a:k].sel[0], t:RSDiff[a:k].sel[-1]),
-												\max(t:RSDiff[a:k].sel) * -20)
+	if empty(tv)
+		call execute(['augroup ' . s:RSD, 'autocmd!', 'augroup END',
+														\'augroup! ' . s:RSD])
 	else
-		call s:Matchdelete(t:RSDiff[a:k].lid)
-		unlet t:RSDiff[a:k].lid
+		call execute(['augroup ' . s:RSD, 'autocmd!'])
+		for tb in tv
+			for k in keys(tb)
+				call execute('autocmd ' .
+					\(exists('##WinClosed') ? 'WinClosed' : 'BufWinLeave') .
+						\' <buffer=' . tb[k].bnr . '> call s:RS_ClearDiff(' .
+															\tb[k].wid . ')')
+			endfor
+		endfor
+		call execute('autocmd! TabEnter * call s:RS_ToggleDiffexpr(-1)')
+		call execute('augroup END')
 	endif
 endfunction
+
+if has('signs')
+	function! s:RS_ToggleSelHL(on, key) abort
+		if a:on
+			if s:Sign_placed() == 0 | call s:Sign_define() | endif
+			if !has_key(t:RSDiff[a:key], 'scl')
+				let t:RSDiff[a:key].scl = &l:signcolumn
+				let &l:signcolumn = 'no'
+			endif
+			for l in range(t:RSDiff[a:key].sel[0], t:RSDiff[a:key].sel[-1])
+				call s:Sign_place(t:RSDiff[a:key].bnr, l)
+			endfor
+		else
+			for l in range(t:RSDiff[a:key].sel[0], t:RSDiff[a:key].sel[-1])
+				call s:Sign_unplace(t:RSDiff[a:key].bnr, l)
+			endfor
+			if has_key(t:RSDiff[a:key], 'scl')
+				let &l:signcolumn = t:RSDiff[a:key].scl
+				unlet t:RSDiff[a:key].scl
+			endif
+			if s:Sign_placed() == 0 | call s:Sign_undefine() | endif
+		endif
+	endfunction
+
+	if exists('*sign_define')
+		function! s:Sign_define()
+			call sign_define(s:RSD, {'linehl': 'CursorColumn',
+									\'texthl': 'CursorColumn', 'text': '|'})
+		endfunction
+		function! s:Sign_undefine()
+			call sign_undefine(s:RSD)
+		endfunction
+		function! s:Sign_place(bn, ln)
+			call sign_place(a:ln, s:RSD, s:RSD, a:bn, {'lnum': a:ln})
+		endfunction
+		function! s:Sign_unplace(bn, ln)
+			call sign_unplace(s:RSD, {'buffer': a:bn, 'id': a:ln})
+		endfunction
+		function! s:Sign_placed()
+			let sn = 0
+			for sb in sign_getplaced()
+				let sn += len(sign_getplaced(sb.bufnr,
+												\{'group': s:RSD})[0].signs)
+			endfor
+			return sn
+		endfunction
+	else
+		function! s:Sign_define()
+			call execute('sign define ' . s:RSD .
+						\' linehl=CursorColumn texthl=CursorColumn text=|')
+		endfunction
+		function! s:Sign_undefine()
+			call execute('sign undefine ' . s:RSD)
+		endfunction
+		function! s:Sign_place(bn, ln)
+			call execute('sign place ' . (a:bn * 10000 + a:ln) .
+					\' line=' . a:ln . ' name=' . s:RSD . ' buffer=' . a:bn)
+		endfunction
+		function! s:Sign_unplace(bn, ln)
+			call execute('sign unplace ' . (a:bn * 10000 + a:ln) .
+														\' buffer=' . a:bn)
+		endfunction
+		function! s:Sign_placed()
+			return len(filter(split(execute('sign place'), '\n'),
+														\'v:val =~ s:RSD'))
+		endfunction
+	endif
+else
+	function! s:RS_ToggleSelHL(on, key) abort
+		if a:on
+			let dc89 = !exists('g:loaded_diffchar') ||
+									\type(g:loaded_diffchar) != type(0.0) ||
+													\g:loaded_diffchar >= 8.9
+			let t:RSDiff[a:key].lid = s:Matchaddpos('CursorColumn',
+					\range(t:RSDiff[a:key].sel[0], t:RSDiff[a:key].sel[-1]),
+								\dc89 ? -7 : max(t:RSDiff[a:key].sel) * -20,
+														\t:RSDiff[a:key].wid)
+		else
+			call s:Matchdelete(t:RSDiff[a:key].lid, t:RSDiff[a:key].wid)
+			unlet t:RSDiff[a:key].lid
+		endif
+	endfunction
+endif
 
 " --------------------------------------
 " A Visual Area SpotDiff
 " --------------------------------------
 
+let s:VSD = 'v_spotdiff'
+
 function! spotdiff#VDiffthis(sl, el, ll) abort
 	if !exists('t:VSDiff') | let t:VSDiff = {}
 	elseif 2 <= len(t:VSDiff)
-		call execute(['echohl Error', 'echo "2 area already selected
-									\ in this tab page!"', 'echohl None'], '')
+		call s:EchoError('2 area already selected in this tab page!')
 		return
 	endif
 	let cw = win_getid() | let cb = winbufnr(cw)
-	" get selected start/end lines and columns
-	if type(a:sl) == type([])			" diffupdate
-		let se = a:sl
-	else
-		let vm = ([a:sl, a:el] == [line("'<"), line("'>")])
-		let se = []
-		for ln in range(a:sl, a:el)
-			let st = getbufline(cb, ln)[0]
-			if empty(st)
-				let [sc, ec] = [0, 0]
-			else
-				if vm
-					let vp = '\%' . ln . 'l\%V.*\%V.'
-					let so = 'cnw' . ((line('.') <= ln) ? '' : 'b')
-					let [sc, ec] = map(['', 'e'],
-											\'searchpos(vp, so . v:val)[1]')
-					if sc != 0 && ec != 0
-						let ec += len(strcharpart(st[ec - 1 :], 0, 1)) - 1
-					endif
-				else
-					let [sc, ec] = [1, len(st)]
-				endif
+	" get selected start and end columns per line
+	let vm = ([a:sl, a:el] == [line("'<"), line("'>")]) ? visualmode() : ''
+	let tc = 0
+	let se = []
+	for ln in range(a:sl, a:el)
+		let st = getbufline(cb, ln)[0]
+		if empty(st)
+			let [sc, ec] = [0, 0]
+		"elseif empty(vm) || vm ==# 'V'
+		elseif empty(vm)
+			let [sc, ec] = [1, len(st)]
+		else
+			"if vm ==# 'v'
+				"let [sc, ec] = [(ln == a:sl) ? col("'<") : 1,
+										"\(ln == a:el) ? col("'>") : len(st)]
+			"else
+				let vp = '\%' . ln . 'l\%V.*\%V.'
+				let so = 'cnw' . ((line('.') <= ln) ? '' : 'b')
+				let [sc, ec] = map(['', 'e'], 'searchpos(vp, so . v:val)[1]')
+			"endif
+			if sc != 0 && ec != 0
+				let ec += len(strcharpart(st[ec - 1 :], 0, 1)) - 1
 			endif
-			let se += [[ln, sc, ec]]
-		endfor
+		endif
+		let se += [[ln, sc, ec]]
+		if [sc, ec] != [0, 0] | let tc += 1 | endif
+	endfor
+	if tc == 0
+		call s:EchoError('No text exists in this area!')
+		return
 	endif
-	" get line range and initialize the 1st or 2nd area
+	" check if the 2nd area is overwraped with the 1st one
 	let [k, j] = has_key(t:VSDiff, 1) ? [2, 1] : [1, 2]
 	if len(t:VSDiff) == 1 && t:VSDiff[j].wid == cw
 		let lj = map(copy(t:VSDiff[j].sel), 'v:val[0]')
@@ -303,18 +370,21 @@ function! spotdiff#VDiffthis(sl, el, ll) abort
 				if ix != -1
 					if sc <= t:VSDiff[j].sel[ix][2] &&
 												\t:VSDiff[j].sel[ix][1] <= ec
-						call execute(['echohl Error', 'echo "This area already
-							\ selected in this window!"', 'echohl None'], '')
+						call s:EchoError('A part of this area already
+												\ selected in this window!')
 						return
 					endif
 				endif
 			endif
 		endfor
 	endif
-	let t:VSDiff[k] = {'wid': cw, 'bnr': cb, 'sel': se, 'lbl': a:ll}
-	if len(t:VSDiff) == 2 | call s:VS_DoDiff() | endif
-	call s:VS_ToggleEvent(1)
+	" do diffthis
+	let t:VSDiff[k] =
+					\{'wid': cw, 'bnr': cb, 'sel': se, 'vmd': vm, 'lbl': a:ll}
 	call s:VS_ToggleSelHL(1, k)
+	if len(t:VSDiff) == 2 | call s:VS_DoDiff() | endif
+	call s:VS_ToggleMap(1)
+	call s:VS_ToggleEvent(1)
 endfunction
 
 function! s:VS_DoDiff() abort
@@ -407,6 +477,9 @@ function! s:VS_DoDiff() abort
 					\min([t:VSDiff[1].sel[-1][0] - t:VSDiff[1].sel[0][0] + 1,
 					\t:VSDiff[2].sel[-1][0] - t:VSDiff[2].sel[0][0] + 1]) : 1
 	let hp = {1: {}, 2: {}}
+	if get(t:, 'DiffPairVisible', get(g:, 'DiffPairVisible', 1))
+		for k in [1, 2] | let t:VSDiff[k].pos = [] | endfor
+	endif
 	for ic in range(lm)
 		let lct = {1: [], 2: []}
 		for k in [1, 2]
@@ -503,20 +576,24 @@ function! s:VS_DoDiff() abort
 						let lc[ln][1] = sc + nc - lc[ln][0]
 					endif
 				endfor
-				for [ln, sn] in items(lc)
-					if !has_key(hp[k], h{k}) | let hp[k][h{k}] = [] | endif
-					let hp[k][h{k}] += [[eval(ln)] + sn]
-				endfor
+				let lx = map(items(lc), '[eval(v:val[0])] + v:val[1]')
+				if !has_key(hp[k], h{k}) | let hp[k][h{k}] = [] | endif
+				let hp[k][h{k}] += lx
+				" set highlighted positions to show diff pair
+				if get(t:, 'DiffPairVisible', get(g:, 'DiffPairVisible', 1))
+					if 1 < len(lx)
+						call sort(lx, {i, j -> i[0] - j[0]})
+					endif
+					let t:VSDiff[k].pos += [lx]
+				endif
 			endfor
 		endfor
 	endfor
 	" draw diff highlights
-	let cw = win_getid()
 	for k in [1, 2]
-		noautocmd call win_gotoid(t:VSDiff[k].wid)
 		let t:VSDiff[k].uid = []
 		for [hl, po] in items(hp[k])
-			let t:VSDiff[k].uid += s:Matchaddpos(hl, po, 0)
+			let t:VSDiff[k].uid += s:Matchaddpos(hl, po, -3, t:VSDiff[k].wid)
 		endfor
 		if has('patch-8.0.1038') && t:VSDiff[k].lbl
 			" strike uncompared extra lines for line-by-line
@@ -524,46 +601,50 @@ function! s:VS_DoDiff() abort
 												\'t:VSDiff[k].sel[v:val]'),
 							\'[v:val[0], v:val[1], v:val[2] - v:val[1] + 1]')
 			if !empty(el)
-				let t:VSDiff[k].uid += s:Matchaddpos('vsDiffChangeS', el, 0)
+				let t:VSDiff[k].uid +=
+					\s:Matchaddpos('vsDiffChangeS', el, -3, t:VSDiff[k].wid)
 			endif
 		endif
 	endfor
-	noautocmd call win_gotoid(cw)
 endfunction
 
 function! spotdiff#VDiffoff(all, ...) abort
 	if !exists('t:VSDiff') | return | endif
-	let cw = win_getid()
 	let sk = keys(t:VSDiff)
 	if !a:all
-		call filter(sk, 't:VSDiff[v:val].wid == cw')
-		if 0 < a:0 && len(t:VSDiff) == 2
+		call filter(sk, 't:VSDiff[v:val].wid == win_getid()')
+		if 0 < a:0
 			" select k within range (default: %) if both are in same window
 			call filter(sk, 'a:1 <= t:VSDiff[v:val].sel[-1][0] &&
 										\t:VSDiff[v:val].sel[0][0] <= a:2')
 		endif
 	endif
 	if empty(sk) | return | endif
+	call s:VS_ToggleMap(0)
 	for k in sk
-		noautocmd call win_gotoid(t:VSDiff[k].wid)
 		call s:VS_ToggleSelHL(0, k)
-		if has_key(t:VSDiff[k], 'uid')
-			call s:Matchdelete(t:VSDiff[k].uid)
-		endif
+		for id in ['uid', 'pid']
+			if has_key(t:VSDiff[k], id)
+				call s:Matchdelete(t:VSDiff[k][id], t:VSDiff[k].wid)
+			endif
+		endfor
 		unlet t:VSDiff[k]
 	endfor
 	if len(t:VSDiff) == 1
 		" resume back to the initial state
 		let k = has_key(t:VSDiff, 1) ? 1 : 2
-		noautocmd call win_gotoid(t:VSDiff[k].wid)
-		if has_key(t:VSDiff[k], 'uid')
-			call s:Matchdelete(t:VSDiff[k].uid)
-			unlet t:VSDiff[k].uid
-		endif
+		for id in ['uid', 'pid']
+			if has_key(t:VSDiff[k], id)
+				call s:Matchdelete(t:VSDiff[k][id], t:VSDiff[k].wid)
+				unlet t:VSDiff[k][id]
+			endif
+		endfor
+		for id in ['pos', 'pvn']
+			if has_key(t:VSDiff[k], id) | unlet t:VSDiff[k][id] | endif
+		endfor
 	elseif len(t:VSDiff) == 0
 		unlet t:VSDiff
 	endif
-	noautocmd call win_gotoid(cw)
 	call s:VS_ToggleEvent(0)
 endfunction
 
@@ -573,12 +654,25 @@ function! spotdiff#VDiffupdate() abort
 	call spotdiff#VDiffoff(1)
 	let cw = win_getid()
 	for k in [1, 2]
-		if has_key(vd, k)
-			noautocmd call win_gotoid(vd[k].wid)
-			call spotdiff#VDiffthis(vd[k].sel, 0, vd[k].lbl)
+		noautocmd call win_gotoid(vd[k].wid)
+		let [sl, sc] = [vd[k].sel[0][0], vd[k].sel[0][1]]
+		let [el, ec] = [vd[k].sel[-1][0], vd[k].sel[-1][2]]
+		if !empty(vd[k].vmd)
+			call execute('normal ' . vd[k].vmd . "\<Esc>")
+			call setpos("'<", [0, sl, sc, 0])
+			call setpos("'>", [0, el, ec, 0])
 		endif
+		call spotdiff#VDiffthis(sl, el, vd[k].lbl)
 	endfor
 	noautocmd call win_gotoid(cw)
+endfunction
+
+function! spotdiff#VDiffOpFunc(vm, lbl) abort
+	call execute('normal ' . ((a:vm == 'char') ? 'v' :
+							\(a:vm == 'line') ? 'V' : "\<C-V>") . "\<Esc>")
+	call setpos("'<", getpos("'["))
+	call setpos("'>", getpos("']"))
+	call spotdiff#VDiffthis(line("'<"), line("'>"), a:lbl)
 endfunction
 
 function! s:VS_ClearDiff(wid) abort
@@ -588,21 +682,156 @@ function! s:VS_ClearDiff(wid) abort
 	noautocmd call win_gotoid(cw)
 endfunction
 
-function! s:VS_ToggleEvent(on) abort
-	let sd = 'v_spotdiff'
-	let tv = filter(map(range(1, tabpagenr('$')),
-							\'gettabvar(v:val, "VSDiff")'), '!empty(v:val)')
-	call execute(['augroup ' . sd, 'autocmd!', 'augroup END'])
-	let an = 0
-	for tb in tv
-		for k in keys(tb)
-			call execute('autocmd ' . sd . ' BufWinLeave <buffer=' .
-					\tb[k].bnr . '> call s:VS_ClearDiff(' . tb[k].wid . ')')
-			let an += 1
+let s:vs_map =
+	\{'<Plug>JumpDiffCharPrevStart': ':call <SID>VS_JumpDiff(0, 0)<CR>',
+	\'<Plug>JumpDiffCharNextStart': ':call <SID>VS_JumpDiff(1, 0)<CR>',
+	\'<Plug>JumpDiffCharPrevEnd': ':call <SID>VS_JumpDiff(0, 1)<CR>',
+	\'<Plug>JumpDiffCharNextEnd': ':call <SID>VS_JumpDiff(1, 1)<CR>'}
+call map(s:vs_map, '[maparg(v:key, "n"), v:val]')
+
+function! s:VS_ToggleMap(on)
+	let vd = exists('t:VSDiff') && len(t:VSDiff) == 2
+	let rn = (a:on == 0 && vd || a:on == -1 && !vd) ? 0 :
+							\(a:on == 1 && vd || a:on == -1 && vd) ? 1 : -1
+	if rn != -1
+		call execute(map(items(s:vs_map),
+					\'"nnoremap <silent> " . v:val[0] . " " . v:val[1][rn]'))
+	endif
+endfunction
+
+function! s:VS_JumpDiff(dir, pos) abort
+	" a:dir : 0 = backward, 1 = forward / a:pos : 0 = start, 1 = end
+	if !exists('t:VSDiff') || len(t:VSDiff) != 2 | return | endif
+	let sk = filter(keys(t:VSDiff), 't:VSDiff[v:val].wid == win_getid()')
+	if empty(sk) | return | endif
+	let [cl, cc] = [line('.'), col('.')]
+	if cc == col('$')		" empty line
+		if !a:dir | let cc = 0 | endif
+	else
+		if a:pos
+			let cc += len(strcharpart(getline(cl)[cc - 1 :], 0, 1)) - 1
+		endif
+	endif
+	let ss = 0
+	for k in sk
+		for ix in a:dir ? range(len(t:VSDiff[k].sel)) :
+									\range(len(t:VSDiff[k].sel) - 1, 0, -1)
+			let sl = t:VSDiff[k].sel[ix]
+			if a:dir ? (cl < sl[0] || cl == sl[0] && cc <= sl[2]) :
+								\(cl > sl[0] || cl == sl[0] && cc >= sl[1])
+				let s{k} = sl
+				let ss += k
+				break
+			endif
 		endfor
 	endfor
-	if an == 0 | call execute('augroup! ' . sd) | endif
-	if an == 1 && a:on || an == 0 && !a:on | call s:VS_ToggleHL(a:on) | endif
+	let sk = (ss == 0) ? [] : (ss == 1) ? [1] : (ss == 2) ? [2] :
+				\(a:dir ? (s1[0] < s2[0] || s1[0] == s2[0] && s1[1] < s2[1]) :
+						\(s1[0] > s2[0] || s1[0] == s2[0] && s1[1] > s2[1])) ?
+															\[1, 2] : [2, 1]
+	for k in sk
+		for pn in a:dir ? (range(has_key(t:VSDiff[k], 'pvn') ?
+									\t:VSDiff[k].pvn + (a:pos ? 0 : 1) : 0,
+											\len(t:VSDiff[k].pos) - 1, 1)) :
+										\(range(has_key(t:VSDiff[k], 'pvn') ?
+										\t:VSDiff[k].pvn + (a:pos ? -1 : 0) :
+											\len(t:VSDiff[k].pos) - 1, 0, -1))
+			let ps = t:VSDiff[k].pos[pn][a:pos ? -1 : 0]
+			let [nl, nc] = [ps[0], a:pos ? ps[1] + ps[2] - 1 : ps[1]]
+			if a:dir ? (cl < nl || cl == nl && cc < nc) :
+											\(cl > nl || cl == nl && cc > nc)
+				call cursor(nl, nc)
+				return
+			endif
+		endfor
+	endfor
+endfunction
+
+function! s:VS_DiffPair(key, event) abort
+	" a:event : 0 = WinLeave, 1 = CursorMoved
+	if !exists('t:VSDiff') || len(t:VSDiff) != 2 | return | endif
+	let [cl, cc] = [line('.'), col('.')]
+	let bkey = (a:key == 1) ? 2 : 1
+	if has_key(t:VSDiff[a:key], 'pvn')
+		if a:event
+			for ps in t:VSDiff[a:key].pos[t:VSDiff[a:key].pvn]
+				if cl == ps[0] && ps[1] <= cc && cc <= ps[1] + ps[2] - 1
+					return
+				endif
+			endfor
+		endif
+		unlet t:VSDiff[a:key].pvn
+		call s:Matchdelete(t:VSDiff[bkey].pid, t:VSDiff[bkey].wid)
+		unlet t:VSDiff[bkey].pid
+	endif
+	if a:event
+		if t:VSDiff[a:key].sel[0][0] <= cl && cl <= t:VSDiff[a:key].sel[-1][0]
+			let pn = len(t:VSDiff[a:key].pos) - 1
+			while 0 <= pn
+				for ps in t:VSDiff[a:key].pos[pn]
+					if cl == ps[0] && ps[1] <= cc && cc <= ps[1] + ps[2] - 1
+						let t:VSDiff[a:key].pvn = pn
+						let t:VSDiff[bkey].pid =
+								\s:Matchaddpos(has('nvim') ? 'TermCursor' :
+								\has('gui_running') ? 'Cursor' : 'IncSearch',
+							\t:VSDiff[bkey].pos[pn], -1, t:VSDiff[bkey].wid)
+						let pn = 0
+						break
+					endif
+				endfor
+				let pn -= 1
+			endwhile
+		endif
+	endif
+endfunction
+
+function! s:VS_ToggleEvent(on) abort
+	let tv = filter(map(range(1, tabpagenr('$')),
+							\'gettabvar(v:val, "VSDiff")'), '!empty(v:val)')
+	if empty(tv)
+		call execute(['augroup ' . s:VSD, 'autocmd!', 'augroup END',
+														\'augroup! ' . s:VSD])
+	else
+		call execute(['augroup ' . s:VSD, 'autocmd!'])
+		for tb in tv
+			for k in keys(tb)
+				call execute('autocmd ' .
+					\(exists('##WinClosed') ? 'WinClosed' : 'BufWinLeave') .
+						\' <buffer=' . tb[k].bnr . '> call s:VS_ClearDiff(' .
+															\tb[k].wid . ')')
+			endfor
+			if len(tb) == 2 && get(t:, 'DiffPairVisible',
+											\get(g:, 'DiffPairVisible', 1))
+				for k in keys(tb)
+					call execute('autocmd CursorMoved <buffer=' . tb[k].bnr .
+										\'> call s:VS_DiffPair(' . k. ', 1)')
+					call execute('autocmd WinLeave <buffer=' . tb[k].bnr .
+										\'> call s:VS_DiffPair(' . k. ', 0)')
+				endfor
+			endif
+		endfor
+		call execute('autocmd TabEnter * call s:VS_ToggleMap(-1)')
+		call execute('augroup END')
+	endif
+endfunction
+
+function! s:VS_ToggleSelHL(on, key) abort
+	let tv = filter(map(range(1, tabpagenr('$')),
+							\'gettabvar(v:val, "VSDiff")'), '!empty(v:val)')
+	if len(tv) == 1 && len(tv[0]) == 1 | call s:VS_ToggleHL(a:on) | endif
+	if a:on
+		let t:VSDiff[a:key].lid =
+			\s:Matchaddpos(
+						\t:VSDiff[a:key].lbl ? 'DiffChange' : 'vsDiffChangeI',
+					\map(filter(copy(t:VSDiff[a:key].sel), 'v:val[1] != 0'),
+						\'[v:val[0], v:val[1], v:val[2] - v:val[1] + 1]'), -5,
+														\t:VSDiff[a:key].wid)
+	else
+		if has_key(t:VSDiff[a:key], 'lid')
+			call s:Matchdelete(t:VSDiff[a:key].lid, t:VSDiff[a:key].wid)
+			unlet t:VSDiff[a:key].lid
+		endif
+	endif
 endfunction
 
 function! s:VS_ToggleHL(on) abort
@@ -628,20 +857,6 @@ function! s:VS_ToggleHL(on) abort
 											\'v:val[0] . "=" . v:val[1]')))
 		endif
 	endfor
-endfunction
-
-function! s:VS_ToggleSelHL(on, k) abort
-	if a:on
-		let t:VSDiff[a:k].lid =
-			\s:Matchaddpos(t:VSDiff[a:k].lbl ? 'DiffChange' : 'vsDiffChangeI',
-						\map(filter(copy(t:VSDiff[a:k].sel), 'v:val[1] != 0'),
-						\'[v:val[0], v:val[1], v:val[2] - v:val[1] + 1]'), -1)
-	else
-		if has_key(t:VSDiff[a:k], 'lid')
-			call s:Matchdelete(t:VSDiff[a:k].lid)
-			unlet t:VSDiff[a:k].lid
-		endif
-	endif
 endfunction
 
 " --------------------------------------
@@ -687,17 +902,42 @@ function! s:TraceDiffChar(u1, u2) abort
 	endwhile
 endfunction
 
-function! s:Matchaddpos(grp, pos, pri) abort
-	return map(range(0, len(a:pos) - 1, 8),
-					\'matchaddpos(a:grp, a:pos[v:val : v:val + 7], a:pri)')
+function! s:EchoError(msg) abort
+	call execute(['echohl Error', 'echo a:msg', 'echohl None'], '')
 endfunction
 
-function! s:Matchdelete(id) abort
-	let gm = map(getmatches(), 'v:val.id')
-	for id in a:id
-		if index(gm, id) != -1 | call matchdelete(id) | endif
-	endfor
-endfunction
+if has('patch-8.1.1084') || has('nvim-0.5.0')
+	function! s:Matchaddpos(grp, pos, pri, wid) abort
+		return map(range(0, len(a:pos) - 1, 8), 'matchaddpos(a:grp,
+					\a:pos[v:val : v:val + 7], a:pri, -1, {"window": a:wid})')
+	endfunction
+
+	function! s:Matchdelete(id, wid) abort
+		let gm = map(getmatches(a:wid), 'v:val.id')
+		for id in a:id
+			if index(gm, id) != -1 | call matchdelete(id, a:wid) | endif
+		endfor
+	endfunction
+else
+	function! s:Matchaddpos(grp, pos, pri, wid) abort
+		let cw = win_getid()
+		noautocmd call win_gotoid(a:wid)
+		let id = map(range(0, len(a:pos) - 1, 8),
+					\'matchaddpos(a:grp, a:pos[v:val : v:val + 7], a:pri)')
+		noautocmd call win_gotoid(cw)
+		return id
+	endfunction
+
+	function! s:Matchdelete(id, wid) abort
+		let cw = win_getid()
+		noautocmd call win_gotoid(a:wid)
+		let gm = map(getmatches(), 'v:val.id')
+		for id in a:id
+			if index(gm, id) != -1 | call matchdelete(id) | endif
+		endfor
+		noautocmd call win_gotoid(cw)
+	endfunction
+endif
 
 if has('patch-8.0.794')
 	let s:CountChar = function('count')
