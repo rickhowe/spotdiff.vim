@@ -1,8 +1,8 @@
 " spotdiff.vim : A range and area selectable :diffthis to compare partially
 "
-" Last Change:	2021/06/08
-" Version:		4.1
-" Author:		Rick Howe <rdcxy754@ybb.ne.jp>
+" Last Change:	2021/08/28
+" Version:		4.2
+" Author:		Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
 " Copyright:	(c) 2014-2021 by Rick Howe
 
 let s:save_cpo = &cpoptions
@@ -222,10 +222,12 @@ function! s:RS_ToggleEvent(on) abort
 		call execute(['augroup ' . s:RSD, 'autocmd!'])
 		for tb in tv
 			for k in keys(tb)
-				call execute('autocmd ' .
-					\(exists('##WinClosed') ? 'WinClosed' : 'BufWinLeave') .
-						\' <buffer=' . tb[k].bnr . '> call s:RS_ClearDiff(' .
-															\tb[k].wid . ')')
+				call execute('autocmd BufWinLeave <buffer=' . tb[k].bnr .
+								\'> call s:RS_ClearDiff(' . tb[k].wid . ')')
+				if exists('##WinClosed')
+					call execute('autocmd WinClosed <buffer=' . tb[k].bnr .
+								\'> call s:RS_ClearDiff(' . tb[k].wid . ')')
+				endif
 			endfor
 		endfor
 		call execute('autocmd! TabEnter * call s:RS_ToggleDiffexpr(-1)')
@@ -319,7 +321,6 @@ endif
 " --------------------------------------
 " A Visual Area SpotDiff
 " --------------------------------------
-
 let s:VSD = 'v_spotdiff'
 
 function! spotdiff#VDiffthis(sl, el, ll) abort
@@ -608,15 +609,21 @@ function! s:VS_DoDiff() abort
 	endfor
 endfunction
 
-function! spotdiff#VDiffoff(all, ...) abort
+function! spotdiff#VDiffoff(all) abort
 	if !exists('t:VSDiff') | return | endif
 	let sk = keys(t:VSDiff)
 	if !a:all
 		call filter(sk, 't:VSDiff[v:val].wid == win_getid()')
-		if 0 < a:0
-			" select k within range (default: %) if both are in same window
-			call filter(sk, 'a:1 <= t:VSDiff[v:val].sel[-1][0] &&
-										\t:VSDiff[v:val].sel[0][0] <= a:2')
+		if len(sk) == 2
+			" select k in which the cursor is if both are in same window
+			let [cl, cc] = [line('.'), col('.')]
+			for k in sk
+				if !empty(filter(copy(t:VSDiff[k].sel), 'v:val[0] == cl &&
+										\v:val[1] <= cc && cc <= v:val[2]'))
+					let sk = [k]
+					break
+				endif
+			endfor
 		endif
 	endif
 	if empty(sk) | return | endif
@@ -795,10 +802,12 @@ function! s:VS_ToggleEvent(on) abort
 		call execute(['augroup ' . s:VSD, 'autocmd!'])
 		for tb in tv
 			for k in keys(tb)
-				call execute('autocmd ' .
-					\(exists('##WinClosed') ? 'WinClosed' : 'BufWinLeave') .
-						\' <buffer=' . tb[k].bnr . '> call s:VS_ClearDiff(' .
-															\tb[k].wid . ')')
+				call execute('autocmd BufWinLeave <buffer=' . tb[k].bnr .
+								\'> call s:VS_ClearDiff(' . tb[k].wid . ')')
+				if exists('##WinClosed')
+					call execute('autocmd WinClosed <buffer=' . tb[k].bnr .
+								\'> call s:VS_ClearDiff(' . tb[k].wid . ')')
+				endif
 			endfor
 			if len(tb) == 2 && get(t:, 'DiffPairVisible',
 											\get(g:, 'DiffPairVisible', 1))

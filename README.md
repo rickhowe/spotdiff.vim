@@ -98,11 +98,12 @@ selected area as the Visual one and then call `:VDiffthis`.  For example,
 	blockwise area.  Redundant lines in the line-by-line comparison are
 	shown with "strikethrough".
 
-* `:[range]VDiffoff[!]`
-	* Clear the selected area within `[range]` (default: all lines) in the
-	current window and reset the differences.  When there are two area
-	selected in the same window, use `[range]` to clear either one.  If `!`
-	flag is specified, clear and reset all area in the current tab page.
+* `:VDiffoff[!]`
+	* Clear the selected area in the current window and reset the
+	differences.  When there are two area selected in the same window,
+	both area will be cleared.  But either one is cleared if the current
+	cursor is located within it.  If `!` flag is specified, clear and reset
+	all area in the current tab page.
 
 * `:VDiffupdate`
 	* Compare the selected area again and show their differences in the

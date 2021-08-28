@@ -1,14 +1,14 @@
 " spotdiff.vim : A range and area selectable diffthis to compare partially
 "
-" Last Change:	2021/06/08
-" Version:		4.1
-" Author:		Rick Howe <rdcxy754@ybb.ne.jp>
+" Last Change:	2021/08/28
+" Version:		4.2
+" Author:		Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
 " Copyright:	(c) 2014-2021 by Rick Howe
 
 if exists('g:loaded_spotdiff') || !has('diff') || v:version < 800
 	finish
 endif
-let g:loaded_spotdiff = 4.1
+let g:loaded_spotdiff = 4.2
 
 let s:save_cpo = &cpoptions
 set cpo&vim
@@ -19,8 +19,7 @@ command! -bar Diffupdate call spotdiff#Diffupdate()
 
 command! -range -bang -bar
 				\ VDiffthis call spotdiff#VDiffthis(<line1>, <line2>, <bang>0)
-command! -range=% -bang -bar
-				\ VDiffoff call spotdiff#VDiffoff(<bang>0, <line1>, <line2>)
+command! -bang -bar VDiffoff call spotdiff#VDiffoff(<bang>0)
 command! -bar VDiffupdate call spotdiff#VDiffupdate()
 
 for [mod, key, plg, cmd] in [
