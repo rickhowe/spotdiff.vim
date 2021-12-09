@@ -1,7 +1,7 @@
 *spotdiff.vim*  A range and area selectable `:diffthis` to compare partially
 
-Last Change:	2021/08/28
-Version:	4.2
+Last Change:	2021/12/09
+Version:	4.3
 Author:		Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
 Copyright:	(c) 2014-2021 by Rick Howe
 
@@ -176,6 +176,11 @@ Keymaps ~
 
 ==============================================================================
 CHANGE HISTORY						*spotdiff-history*
+
+Update : 4.3
+* Updated to check a new WinClosed event (patch-8.2.3591) to appropriately
+  clear the selected range or area and reset its differences when a window is
+  closed.
 
 Update : 4.2
 * Changed `:VDiffoff` command to check the current cursor position and find

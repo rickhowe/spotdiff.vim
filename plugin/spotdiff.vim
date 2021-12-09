@@ -1,19 +1,19 @@
 " spotdiff.vim : A range and area selectable diffthis to compare partially
 "
-" Last Change:	2021/08/28
-" Version:		4.2
+" Last Change:	2021/12/09
+" Version:		4.3
 " Author:		Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
 " Copyright:	(c) 2014-2021 by Rick Howe
 
 if exists('g:loaded_spotdiff') || !has('diff') || v:version < 800
 	finish
 endif
-let g:loaded_spotdiff = 4.2
+let g:loaded_spotdiff = 4.3
 
 let s:save_cpo = &cpoptions
 set cpo&vim
 
-command! -range -bang -bar Diffthis call spotdiff#Diffthis(<line1>, <line2>)
+command! -range -bar Diffthis call spotdiff#Diffthis(<line1>, <line2>)
 command! -bang -bar Diffoff call spotdiff#Diffoff(<bang>0)
 command! -bar Diffupdate call spotdiff#Diffupdate()
 
@@ -39,10 +39,10 @@ for [mod, key, plg, cmd] in [
 						\':let &operatorfunc = ''<SID>VDiffOpFunc1''<CR>g@']]
 	if !hasmapto(plg, mod) && empty(maparg(key, mod))
 		if get(g:, 'VDiffDoMapping', 1)
-			execute mod . 'map <silent> ' . key . ' ' . plg
+			call execute(mod . 'map <silent> ' . key . ' ' . plg)
 		endif
 	endif
-	execute mod . 'noremap <silent> ' . plg . ' ' . cmd
+	call execute(mod . 'noremap <silent> ' . plg . ' ' . cmd)
 endfor
 
 function! s:VDiffOpFunc0(vm) abort
