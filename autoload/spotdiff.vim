@@ -1,9 +1,9 @@
 " spotdiff.vim : A range and area selectable :diffthis to compare partially
 "
-" Last Change:	2021/12/09
-" Version:		4.3
+" Last Change:	2022/07/01
+" Version:		4.4
 " Author:		Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
-" Copyright:	(c) 2014-2021 by Rick Howe
+" Copyright:	(c) 2014-2022 by Rick Howe
 
 let s:save_cpo = &cpoptions
 set cpo&vim
@@ -70,8 +70,8 @@ function! spotdiff#Diffthis(sl, el) abort
 	call execute('diffthis')
 	call s:RS_ToggleSelHL(1, k)
 	if has_key(t:RSDiff[k], 'cln')
-		call map(wo, 'setwinvar(t:RSDiff[k].wid, "&" . v:key, v:val)')
-		call map(bo, 'setbufvar(t:RSDiff[k].bnr, "&" . v:key, v:val)')
+		silent! call map(wo, 'setwinvar(t:RSDiff[k].wid, "&" . v:key, v:val)')
+		silent! call map(bo, 'setbufvar(t:RSDiff[k].bnr, "&" . v:key, v:val)')
 		" set some specific local options
 		let &l:modifiable = 0
 		let &l:buftype = 'nofile'
@@ -148,12 +148,16 @@ endfunction
 
 function! spotdiff#Diffupdate() abort
 	if !exists('t:RSDiff') || len(t:RSDiff) != 2 | return | endif
-	let rd = copy(t:RSDiff)
+	let rd = deepcopy(t:RSDiff)
+	for k in [1, 2]
+		if has_key(rd[k], 'cln') | call remove(t:RSDiff[k], 'cln') | endif
+	endfor
 	call spotdiff#Diffoff(1)
 	let cw = win_getid()
 	for k in [1, 2]
 		noautocmd call win_gotoid(rd[k].wid)
 		call spotdiff#Diffthis(rd[k].sel[0], rd[k].sel[-1])
+		if has_key(rd[k], 'cln') | let t:RSDiff[k].cln = rd[k].cln | endif
 	endfor
 	noautocmd call win_gotoid(cw)
 endfunction
@@ -183,25 +187,23 @@ function! spotdiff#Diffexpr() abort
 		let f_{n} = f_{n}[t:RSDiff[k].sel[0] - 1 : t:RSDiff[k].sel[1] - 1]
 	endfor
 	let do = split(&diffopt, ',')
-	let save_igc = &ignorecase
-	let &ignorecase = (index(do, 'icase') != -1)
-	if index(do, 'iwhiteall') != -1
-		for n in ['in', 'new']
+	for n in ['in', 'new']
+		if index(do, 'icase') != -1
+			call map(f_{n}, 'tolower(v:val)')
+		endif
+		if index(do, 'iwhiteall') != -1
 			call map(f_{n}, 'substitute(v:val, "\\s\\+", "", "g")')
-		endfor
-	elseif index(do, 'iwhite') != -1
-		for n in ['in', 'new']
+		elseif index(do, 'iwhite') != -1
 			call map(f_{n}, 'substitute(v:val, "\\s\\+", " ", "g")')
 			call map(f_{n}, 'substitute(v:val, "\\s\\+$", "", "")')
-		endfor
-	elseif index(do, 'iwhiteeol') != -1
-		for n in ['in', 'new']
+		elseif index(do, 'iwhiteeol') != -1
 			call map(f_{n}, 'substitute(v:val, "\\s\\+$", "", "")')
-		endfor
-	endif
+		endif
+	endfor
 	let f_out = []
 	let [l1, l2] = [1, 1]
-	for ed in split(s:TraceDiffChar(f_in, f_new), '[+-]\+\zs', 1)[: -2]
+	for ed in split(s:TraceDiffChar(f_in, f_new,
+				\index(do, 'indent-heuristic') != -1), '[+-]\+\zs', 1)[: -2]
 		let [qe, q1, q2] = map(['=', '-', '+'], 's:CountChar(ed, v:val)')
 		let [l1, l2] += [qe, qe]
 		let f_out += [((1 < q1) ? l1 . ',' : '') . (l1 + q1 - 1) .
@@ -209,7 +211,6 @@ function! spotdiff#Diffexpr() abort
 								\((1 < q2) ? l2 . ',' : '') . (l2 + q2 - 1)]
 		let [l1, l2] += [q1, q2]
 	endfor
-	let &ignorecase = save_igc
 	call filter(f_out, 'v:val[0] !~ "[<>-]"')
 	for n in range(len(f_out))
 		let [se1, op, se2] = split(substitute(f_out[n], '[acd]', ' & ', ''))
@@ -440,12 +441,13 @@ function! spotdiff#VDiffthis(sl, el, ll) abort
 endfunction
 
 function! s:VS_DoDiff() abort
-	" set diffopt flags for icase/iwhite
+	" set diffopt flags for icase/iwhite/indent
 	let do = split(&diffopt, ',')
 	let igc = (index(do, 'icase') != -1)
 	let igw = (index(do, 'iwhiteall') != -1) ? 1 :
 									\(index(do, 'iwhite') != -1) ? 2 :
 									\(index(do, 'iwhiteeol') != -1) ? 3 : 0
+	let idh = (index(do, 'indent-heuristic') != -1)
 	" set regular expression to split diff unit
 	let du = get(t:, 'DiffUnit', get(g:, 'DiffUnit', 'Word1'))
 	if du == 'Char'
@@ -511,7 +513,7 @@ function! s:VS_DoDiff() abort
 					\!empty(filter(['fg', 'bg', 'sp', 'bold', 'underline',
 						\'undercurl', 'strikethrough', 'reverse', 'inverse',
 													\'italic', 'standout'],
-											'!empty(synIDattr(id, v:val))'))
+											\'!empty(synIDattr(id, v:val))'))
 				let hl[reltimestr(reltime())[-2 :] . id] = nm
 			endif
 			let id += 1
@@ -529,9 +531,7 @@ function! s:VS_DoDiff() abort
 					\min([t:VSDiff[1].sel[-1][0] - t:VSDiff[1].sel[0][0] + 1,
 					\t:VSDiff[2].sel[-1][0] - t:VSDiff[2].sel[0][0] + 1]) : 1
 	let hp = {1: {}, 2: {}}
-	if get(t:, 'DiffPairVisible', get(g:, 'DiffPairVisible', 1))
-		for k in [1, 2] | let t:VSDiff[k].pos = [] | endfor
-	endif
+	for k in [1, 2] | let t:VSDiff[k].pos = [] | endfor
 	for ic in range(lm)
 		let lct = {1: [], 2: []}
 		for k in [1, 2]
@@ -543,6 +543,7 @@ function! s:VS_DoDiff() abort
 				if empty(st)
 					let lct[k] += [[[ln, 0, 0], '']]
 				else
+					if igc | let st = tolower(st) | endif
 					for tx in split(st, sre)
 						let tl = len(tx)
 						let lct[k] += [[[ln, sc, tl], tx]]
@@ -584,10 +585,8 @@ function! s:VS_DoDiff() abort
 			endif
 		endfor
 		" compare both diff units
-		let sc = &ignorecase | let &ignorecase = igc
 		let es = s:TraceDiffChar(map(copy(lct[1]), 'v:val[1]'),
-											\map(copy(lct[2]), 'v:val[1]'))
-		let &ignorecase = sc
+										\map(copy(lct[2]), 'v:val[1]'), idh)
 		" set highlight positions
 		let cn = 0 | let [p1, p2] = [0, 0]
 		for ed in split(es, '[+-]\+\zs', 1)[: -2]
@@ -632,12 +631,10 @@ function! s:VS_DoDiff() abort
 				if !has_key(hp[k], h{k}) | let hp[k][h{k}] = [] | endif
 				let hp[k][h{k}] += lx
 				" set highlighted positions to show diff pair
-				if get(t:, 'DiffPairVisible', get(g:, 'DiffPairVisible', 1))
-					if 1 < len(lx)
-						call sort(lx, {i, j -> i[0] - j[0]})
-					endif
-					let t:VSDiff[k].pos += [lx]
+				if 1 < len(lx)
+					call sort(lx, {i, j -> i[0] - j[0]})
 				endif
+				let t:VSDiff[k].pos += [lx]
 			endfor
 		endfor
 	endfor
@@ -748,6 +745,7 @@ function! s:VS_ClearDiff(wid) abort
 	endif
 endfunction
 
+if exists('g:loaded_diffchar')
 let s:vs_map =
 	\{'<Plug>JumpDiffCharPrevStart': ':call <SID>VS_JumpDiff(0, 0)<CR>',
 	\'<Plug>JumpDiffCharNextStart': ':call <SID>VS_JumpDiff(1, 0)<CR>',
@@ -764,6 +762,23 @@ function! s:VS_ToggleMap(on) abort
 					\'"nnoremap <silent> " . v:val[0] . " " . v:val[1][rn]'))
 	endif
 endfunction
+else
+for [key, plg, cmd] in [
+	\['[b', '<Plug>JumpDiffCharPrevStart', ':call <SID>VS_JumpDiff(0, 0)'],
+	\[']b', '<Plug>JumpDiffCharNextStart', ':call <SID>VS_JumpDiff(1, 0)'],
+	\['[e', '<Plug>JumpDiffCharPrevEnd', ':call <SID>VS_JumpDiff(0, 1)'],
+	\[']e', '<Plug>JumpDiffCharNextEnd', ':call <SID>VS_JumpDiff(1, 1)']]
+	if !hasmapto(plg, 'n') && empty(maparg(key, 'n'))
+		if get(g:, 'DiffCharDoMapping', 1) && get(g:, 'VDiffDoMapping', 1)
+			call execute('nmap <silent> ' . key . ' ' . plg)
+		endif
+	endif
+	call execute('nnoremap <silent> ' . plg . ' ' . cmd . '<CR>')
+endfor
+
+function! s:VS_ToggleMap(on) abort
+endfunction
+endif
 
 function! s:VS_JumpDiff(dir, pos) abort
 	" a:dir : 0 = backward, 1 = forward / a:pos : 0 = start, 1 = end
@@ -929,16 +944,16 @@ endfunction
 " Common
 " --------------------------------------
 
-function! s:TraceDiffChar(u1, u2) abort
+function! s:TraceDiffChar(u1, u2, ih) abort
 	" An O(NP) Sequence Comparison Algorithm
 	let [n1, n2] = [len(a:u1), len(a:u2)]
-	if a:u1 == a:u2 | return repeat('=', n1)
+	if a:u1 ==# a:u2 | return repeat('=', n1)
 	elseif n1 == 0 | return repeat('+', n2)
 	elseif n2 == 0 | return repeat('-', n1)
 	endif
 	" reverse to be N >= M
 	let [N, M, u1, u2, e1, e2] = (n1 >= n2) ?
-			\[n1, n2, a:u1, a:u2, '+', '-'] : [n2, n1, a:u2, a:u1, '-', '+']
+			\[n1, n2, a:u1, a:u2, '-', '+'] : [n2, n1, a:u2, a:u1, '+', '-']
 	let D = N - M
 	let fp = repeat([-1], M + N + 1)
 	let etree = []		" [next edit, previous p, previous k]
@@ -947,11 +962,11 @@ function! s:TraceDiffChar(u1, u2) abort
 		let p += 1
 		let epk = repeat([[]], p * 2 + D + 1)
 		for k in range(-p, D - 1, 1) + range(D + p, D, -1)
-			let [y, epk[k]] = (fp[k - 1] < fp[k + 1]) ?
-							\[fp[k + 1], [e1, (k < D) ? p - 1 : p, k + 1]] :
-							\[fp[k - 1] + 1, [e2, (k > D) ? p - 1 : p, k - 1]]
+			let [y, epk[k]] = (fp[k - 1] + 1 > fp[k + 1]) ?
+						\[fp[k - 1] + 1, [e1, [(k > D) ? p - 1 : p, k - 1]]] :
+							\[fp[k + 1], [e2, [(k < D) ? p - 1 : p, k + 1]]]
 			let x = y - k
-			while x < M && y < N && u2[x] == u1[y]
+			while x < M && y < N && u2[x] ==# u1[y]
 				let epk[k][0] .= '='
 				let [x, y] += [1, 1]
 			endwhile
@@ -963,16 +978,40 @@ function! s:TraceDiffChar(u1, u2) abort
 	let ses = ''
 	while 1
 		let ses = etree[p][k][0] . ses
-		if p == 0 && k == 0 | return ses[1 :] | endif
-		let [p, k] = etree[p][k][1 : 2]
+		if [p, k] == [0, 0] | break | endif
+		let [p, k] = etree[p][k][1]
 	endwhile
+	let ses = ses[1 :]
+	if a:ih
+		" follow indent-heuristic, replace =\+ <-> +\+ or -\+ in 2 or more
+		" =\++\+ or =\+-\+ blocks (AB vs AxByAB : =+=+++ -> ++++==)
+		let [p1, p2, qc, et, ex] = [-1, -1, 0, '', '']
+		for ed in reverse(split(ses, '[+-]\+\zs'))
+			let es = ed . et
+			let qe = count(ed, '=')
+			if 0 < qe
+				let [q1, q2] = [count(es, e1), count(es, e2)]
+				let [uu, pp, qq] = (qe <= q1 && q2 == 0) ? [u1, p1, q1] :
+						\(q1 == 0 && qe <= q2) ? [u2, p2, q2] : [[], -1, -1]
+				let [ex, es, p1, p2] =
+							\(!empty(uu) && uu[pp - qq - qe + 1 : pp - qq] ==#
+													\uu[pp - qe + 1 : pp]) ?
+							\[es[: qe - 1] . ex, es[qe :], p1 - qe, p2 - qe] :
+									\[es . ex, '', p1 - qe - q1, p2 - qe - q2]
+				let qc += 1
+			endif
+			let et = es
+		endfor
+		if 1 < qc | let ses = et . ex | endif
+	endif
+	return ses
 endfunction
 
 function! s:EchoError(msg) abort
 	call execute(['echohl Error', 'echo a:msg', 'echohl None'], '')
 endfunction
 
-if has('patch-8.1.1084') || has('nvim-0.5.0')
+if has('patch-8.1.1084') || has('nvim-0.4.4')
 	function! s:Matchaddpos(grp, pos, pri, wid) abort
 		return (win_id2win(a:wid) != 0) ? map(range(0, len(a:pos) - 1, 8),
 					\'matchaddpos(a:grp, a:pos[v:val : v:val + 7], a:pri, -1,
