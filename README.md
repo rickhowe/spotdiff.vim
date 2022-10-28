@@ -29,24 +29,24 @@ plugin, you can see the exact differences and use their options and keymaps.
 #### Commands
 
 * `:[range]Diffthis`
-	* Select a range of lines with `[range]` (default: current line) and make
-	the current window diff mode. The selected lines are highlighted in
-	`hl-CursorColumn`. Shortly after the two separate windows become diff
-	mode, `:Diffthis` shows the differences for selected lines in each
-	window. It is also possible to select two ranges of lines in the same
-	window. In that case, `:Diffthis` opens a temporary new window above
-	or below of the current one, copies selected lines to it, and shows
-	the difference with source window.
+    * Select a range of lines with `[range]` (default: current line) and make the
+    current window diff mode. The selected lines are highlighted in
+    `hl-CursorColumn`. Shortly after the two separate windows become diff
+    mode, `:Diffthis` shows the differences for selected lines in each window.
+    It is also possible to select two ranges of lines in the same window. In
+    that case, `:Diffthis` opens a temporary new window above or below of the
+    current one, copies selected lines to it, and shows the difference with
+    source window.
 
 * `:Diffoff[!]`
-	* Clear the selected range of lines and reset diff mode for the current
-	window. If `!` flag is specified, clear and reset for all windows in
-	the current tab page. The temporary window created by `:Diffthis` will
-	be closed.
+    * Clear the selected range of lines and reset diff mode for the current
+    window. If `!` flag is specified, clear and reset for all windows in the
+    current tab page. The temporary window created by `:Diffthis` will be
+    closed.
 
 * `:Diffupdate`
-	* Update the differences for the selected range of lines in the current
-	tab page.
+    * Update the differences for the selected range of lines in the current tab
+    page.
 
 #### Demo
 
@@ -82,34 +82,34 @@ selected area as the Visual one and then call `:VDiffthis`. For example,
 #### Commands
 
 * `:[range]VDiffthis[!]`
-	* Select the characterwise, linewise, or blockwise Visual area most
-	recently used in the current window. If `[range]` (default: current
-	line) is not specified as `'<,'>` and different from the last Visual
-	area, those specified lines are selected as linewise area instead.
-	The selected area is highlighted in `hl-DiffChange` with "italic", and
-	then will be compared as a single combined line. Shortly after the two
-	area are selected, `:VDiffthis` compares them based on the
-	`g:DiffUnit` option and "icase", "iwhite", "iwhiteall" and "iwhiteeol"
-	flags in the 'diffopt' option. In addition, when "indent-heuristic" is
-	specified, positioning of the added/deleted diff units is adjusted to
-	make them easier to read. Then their differences are shown using the
-	`g:DiffColors` option. It is also possible to select two area in
-	the same window. If `!` flag is specified, each line is separately
-	compared, which would be useful particular for columns in a table on
-	blockwise area. Redundant lines in the line-by-line comparison are
-	shown with "strikethrough".
+    * Select the characterwise, linewise, or blockwise Visual area most recently
+    used in the current window. If `[range]` (default: current line) is not
+    specified as `'<,'>` and different from the last Visual area, those
+    specified lines are selected as linewise area instead. The selected area
+    is highlighted in `hl-DiffChange` with "italic", and then will be compared
+    as a single combined line. Shortly after the two area are selected,
+    `:VDiffthis` compares them based on the `g:DiffUnit` option and "icase",
+    "iwhite", "iwhiteall" and "iwhiteeol" flags in the 'diffopt' option. In
+    addition, when "indent-heuristic" is specified, positioning of the
+    added/deleted diff units is adjusted to make them easier to read. Then
+    their differences are shown using the `g:DiffColors` option. It is also
+    possible to select two area in the same window. If `!` flag is specified,
+    each line is separately compared, which would be useful particular for
+    columns in a table on blockwise area. Redundant lines in the line-by-line
+    comparison are shown with "strikethrough".
 
 * `:VDiffoff[!]`
-	* Clear the selected area in the current window and reset the
-	differences. When there are two area selected in the same window, both
-	area will be cleared. But either one is cleared if the current cursor
-	is located within it. If `!` flag is specified, clear and reset all
-	area in the current tab page.
+    * Clear the selected area in the current window and reset the differences.
+    When there are two area selected in the same window, both area will be
+    cleared. But either one is cleared if the current cursor is located within
+    it. If `!` flag is specified, clear and reset all area in the current tab
+    page.
 
 * `:VDiffupdate`
-	* Compare the selected area again and show their differences in the
-	current tab page, when you make changes to the selected area or you
-	want to change the `g:DiffUnit` or `g:DiffColors` option.
+    * Compare the selected area again and show their differences in the current
+    tab page, when you make changes to the selected area or you want to change
+    the `g:DiffUnit` or `g:DiffColors` option or some flags in the 'diffopt'
+    option.
 
 #### Options
 
@@ -123,15 +123,21 @@ These options are same as those used in the [diffchar.vim](https://github.com/ri
   | 'Word1' | `\w\+` word and any `\W` single character (default) |
   | 'Word2' | non-space and space words |
   | 'Word3' | `\<` or `\>` character class boundaries (set by `iskeyword` option) |
+  | 'word' | see `word` |
+  | 'WORD' | see `WORD` |
+  | '[{del}]' | one or more diff unit delimiters (e.g. "[,:\t<>]") |
+  | '/{pat}/' | a pattern to split into diff units (e.g. '/.\{4}\zs/') |
 
-* `g:DiffColors`, `t:DiffColors`: Matching colors for changed units
+* `g:DiffColors`, `t:DiffColors`: Matching colors for changed units (`hl-DiffAdd` for added units)
 
   | Value | Description |
   | --- | --- |
   | 0 | `hl-DiffText` (default) |
-  | 1 | `hl-DiffText` + up to 3 other highlights |
-  | 2 | `hl-DiffText` + up to 7 other highlights |
-  | 3 | `hl-DiffText` + up to 15 other highlights |
+  | 1 | `hl-DiffText` + a few (3, 4, ...) highlight groups |
+  | 2 | `hl-DiffText` + several (7, 8, ...) highlight groups |
+  | 3 | `hl-DiffText` + many (11, 12, ...) highlight groups |
+  | 100 | all available highlight groups in random order |
+  | [{hlg}] | a list of your favorite highlight groups |
 
 * `g:DiffPairVisible`, `t:DiffPairVisible`: Visibility of corresponding diff units
 
