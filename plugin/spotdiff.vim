@@ -1,16 +1,16 @@
 " spotdiff.vim : A range and area selectable diffthis to compare partially
 "
-" Last Change: 2023/03/26
-" Version:     5.0
+" Last Change: 2024/01/19
+" Version:     5.1
 " Author:      Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
-" Copyright:   (c) 2014-2023 by Rick Howe
+" Copyright:   (c) 2014-2024 by Rick Howe
 " License:     MIT
 
 if exists('g:loaded_spotdiff') || !has('diff') ||
                                     \!(802 <= v:version || has('nvim-0.4.4'))
   finish
 endif
-let g:loaded_spotdiff = 5.0
+let g:loaded_spotdiff = 5.1
 
 let s:save_cpo = &cpoptions
 set cpo&vim

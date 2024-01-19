@@ -34,7 +34,8 @@ plugin, you can see the exact differences and use their options and keymaps.
     `hl-CursorColumn`. Shortly after the two separate windows become diff
     mode, `:Diffthis` shows the differences for selected lines in each window.
     It is also possible to select two ranges of lines in the same window. In
-    that case, `:Diffthis` opens a temporary new window above or below of the
+    that case, `:Diffthis` opens a temporary new window at above or below (or
+    left or right if "vertical" is included in the 'diffopt' option) of the
     current one, copies selected lines to it, and shows the difference with
     source window.
 

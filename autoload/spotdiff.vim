@@ -1,9 +1,9 @@
 " spotdiff.vim : A range and area selectable :diffthis to compare partially
 "
-" Last Change: 2023/03/26
-" Version:     5.0
+" Last Change: 2024/01/19
+" Version:     5.1
 " Author:      Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
-" Copyright:   (c) 2014-2023 by Rick Howe
+" Copyright:   (c) 2014-2024 by Rick Howe
 " License:     MIT
 
 let s:save_cpo = &cpoptions
@@ -54,20 +54,26 @@ function! spotdiff#Diffthis(sl, el) abort
     let tx = getline(a:sl, a:el)
     let wo = getwinvar(cw, '&', {})
     let bo = getbufvar(cb, '&', {})
-    " get height of a clone window, create it, and copy the selected text
-    let lc = [line('.'), col('.')]
-    call cursor([a:sl, 1]) | let ch = winline()
-    call cursor([a:el, col([a:el, '$'])]) | let ch = winline() - ch + 1
-    let ch = max([ch, a:el - a:sl + 1])
-    call cursor(lc)
-    let mh = (winheight(0) - 1) / 2
+    " get width or height of a clone window, create it, copy the selected text
+    let vt = (&diffopt =~ 'vertical')
+    if vt
+      let mw = (winwidth(0) - 1) / 2
+    else
+      let mh = (winheight(0) - 1) / 2
+      let lc = [line('.'), col('.')]
+      call cursor([a:sl, 1]) | let ch = winline()
+      call cursor([a:el, col([a:el, '$'])]) | let ch = winline() - ch + 1
+      call cursor(lc)
+      let ch = max([ch, a:el - a:sl + 1])
+    endif
     if t:RSDiff[j].wid != cw
       " move to the original split window
       let cw = t:RSDiff[j].wid
       noautocmd call win_gotoid(t:RSDiff[j].wid)
     endif
-    call execute(((t:RSDiff[j].sel[0] > a:sl) ? 'above ' : 'below ') .
-                                                      \min([ch, mh]) . 'new')
+    let ab = (vt && &splitright || !vt && &splitbelow ||
+                    \t:RSDiff[j].sel[0] <= a:sl) ? 'belowright' : 'aboveleft'
+    call execute(ab . ' ' . (vt ? mw . 'vnew' : min([ch, mh]) . 'new'))
     call setline(1, tx)
     let t:RSDiff[k] = {'wid': win_getid(), 'bnr': bufnr('%'),
                                       \'sel': [1, a:el - a:sl + 1], 'cln': cw}
@@ -84,16 +90,18 @@ function! spotdiff#Diffthis(sl, el) abort
     let &l:bufhidden = 'wipe'
     let &l:buflisted = 0
     let &l:swapfile = 0
+    if !vt
     " adjust height of clone window with foldclosed and diff filler lines
-    let xh = 0 | let l = 1
-    while l <= line('$') + 1
-      let fe = foldclosedend(l)
-      if fe != -1 | let xh -= fe - l | let l = fe
-      else | let xh += diff_filler(l)
-      endif
-      let l += 1
-    endwhile
-    if xh != 0 | call execute('resize ' . min([ch + xh, mh])) | endif
+      let xh = 0 | let l = 1
+      while l <= line('$') + 1
+        let fe = foldclosedend(l)
+        if fe != -1 | let xh -= fe - l | let l = fe
+        else | let xh += diff_filler(l)
+        endif
+        let l += 1
+      endwhile
+      if xh != 0 | call execute('resize ' . min([ch + xh, mh])) | endif
+    endif
   endif
   call s:RS_ToggleEvent(1)
 endfunction
@@ -473,7 +481,9 @@ function! s:VS_DoDiff() abort
   let hcu = ['DiffText']
   let dc = get(t:, 'DiffColors', get(g:, 'DiffColors', 0))
   if type(dc) == type([])
-    let hcu += filter(copy(dc), '0 < hlID(v:val)')
+    let hcu += filter(copy(dc),
+                  \'0 < hlID(v:val) && !empty(synIDattr(hlID(v:val), "bg#"))')
+    if 1 < len(hcu) | unlet hcu[0] | endif
   elseif 1 <= dc && dc <= 3
     let lv = dc - 1
     let bx = []
@@ -604,7 +614,7 @@ function! s:VS_DoDiff() abort
             let mx += [lct[k][ix][0]]
           endfor
           let p{k} += q{k}
-        else      " delete
+        else          " delete
           let h{k} = 'vsDiffChangeBU'
           if 0 < p{k}
             let po = lct[k][p{k} - 1][0]
@@ -783,7 +793,7 @@ function! s:VS_JumpDiff(dir, pos) abort
   let sk = filter(keys(t:VSDiff), 't:VSDiff[v:val].wid == win_getid()')
   if empty(sk) | return | endif
   let [cl, cc] = [line('.'), col('.')]
-  if cc == col('$')   " empty line
+  if cc == col('$')     " empty line
     if !a:dir | let cc = 0 | endif
   else
     if a:pos
@@ -909,8 +919,6 @@ function! s:VS_DrawClearSel(on, key) abort
 endfunction
 
 function! s:VS_ToggleHL(on) abort
-  let hm = (has('gui_running') || has('termguicolors') && &termguicolors) ?
-                                                              \'gui' : 'cterm'
   for [fh, th, ta] in [
                     \['DiffChange', 'vsDiffChangeBU', ['bold', 'underline']],
                     \['DiffChange', 'vsDiffChangeI', ['italic']],
@@ -919,10 +927,14 @@ function! s:VS_ToggleHL(on) abort
     if a:on
       let at = {}
       let id = synIDtrans(hlID(fh))
-      for hc in ['fg', 'bg'] | let at[hm . hc] = synIDattr(id, hc) | endfor
-      let at[hm] = join(filter(['bold', 'underline', 'undercurl',
+      for hm in ['cterm', 'gui']
+        for hc in ['fg', 'bg']
+          let at[hm . hc] = synIDattr(id, hc, hm)
+        endfor
+        let at[hm] = join(filter(['bold', 'underline', 'undercurl',
                 \'strikethrough', 'reverse', 'inverse', 'italic', 'standout'],
                                   \'!empty(synIDattr(id, v:val))') + ta, ',')
+      endfor
       call map(at, '!empty(v:val) ? v:val : "NONE"')
       call execute('highlight ' . th . ' ' .
                                     \join(map(items(at), 'join(v:val, "=")')))
