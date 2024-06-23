@@ -1,7 +1,7 @@
 *spotdiff.txt*  A range and area selectable `:diffthis` to compare partially
 
-Last Change: 2024/01/19
-Version:     5.1
+Last Change: 2024/06/23
+Version:     5.2
 Author:      Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
 Copyright:   (c) 2014-2024 by Rick Howe
 License:     MIT
@@ -185,6 +185,9 @@ Keymaps ~
 
 ==============================================================================
 CHANGE HISTORY                                          *spotdiff-history*
+
+Update : 5.2
+* Implemented to update the differences shortly after the text is changed.
 
 Update : 5.1
 * Added to open a temporary new window at left or right in |:Diffthis| command
