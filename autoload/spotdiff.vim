@@ -1,16 +1,16 @@
 " spotdiff.vim : A range and area selectable :diffthis to compare partially
 "
-" Last Change: 2024/06/23
-" Version:     5.2
+" Last Change: 2025/10/23
+" Version:     6.0
 " Author:      Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
-" Copyright:   (c) 2014-2024 by Rick Howe
+" Copyright:   (c) 2014-2025 by Rick Howe
 " License:     MIT
 
 let s:save_cpo = &cpoptions
 set cpo&vim
 
 " --------------------------------------
-" A Range of Lines SpotDiff
+" a range of lines selectable spotdiff
 " --------------------------------------
 let s:RSD = 'r_spotdiff'
 
@@ -18,7 +18,7 @@ function! spotdiff#Diffthis(sl, el) abort
   let rn = !exists('t:RSDiff') ? 0 : len(t:RSDiff)
   if rn != len(filter(gettabinfo(tabpagenr())[0].windows,
                                                 \'getwinvar(v:val, "&diff")'))
-    call s:EchoWarning('More/less diff mode windows exist in this tabpage!')
+    call s:EchoWarning('More/less diff mode windows exist in this tab page!')
     return
   elseif rn == 2
     call s:EchoWarning('2 pairs of range already selected in this tab page!')
@@ -37,7 +37,7 @@ function! spotdiff#Diffthis(sl, el) abort
   let [k, j] = has_key(t:RSDiff, 1) ? [2, 1] : [1, 2]
   if empty(t:RSDiff) || t:RSDiff[j].bnr != cb
     " diffthis on the 1st or the 2nd different buffer
-    let t:RSDiff[k] = {'wid': cw, 'bnr': cb, 'sel': [a:sl, a:el]}
+    let t:RSDiff[k] = #{wid: cw, bnr: cb, sel: [a:sl, a:el]}
   else
     " diffthis on the 2nd same buffer
     " save winfix options and set them in all non-RSDiff windows
@@ -75,8 +75,8 @@ function! spotdiff#Diffthis(sl, el) abort
                     \t:RSDiff[j].sel[0] <= a:sl) ? 'belowright' : 'aboveleft'
     call execute(ab . ' ' . (vt ? mw . 'vnew' : min([ch, mh]) . 'new'))
     call setline(1, tx)
-    let t:RSDiff[k] = {'wid': win_getid(), 'bnr': bufnr('%'),
-                                      \'sel': [1, a:el - a:sl + 1], 'cln': cw}
+    let t:RSDiff[k] = #{wid: win_getid(), bnr: bufnr('%'),
+                                          \sel: [1, a:el - a:sl + 1], cln: cw}
   endif
   call s:RS_ToggleDiffexpr(1)
   call execute('diffthis')
@@ -189,49 +189,21 @@ function! s:RS_ToggleDiffexpr(on) abort
 endfunction
 
 function! spotdiff#Diffexpr() abort
-  for n in ['in', 'new'] | let f_{n} = readfile(v:fname_{n}) | endfor
-  if f_in == ['line1'] && f_new == ['line2']
-    call writefile(['1c1'], v:fname_out)
-    return
-  endif
-  for [k, n] in [[1, 'in'], [2, 'new']]
-    let f_{n} = f_{n}[t:RSDiff[k].sel[0] - 1 : t:RSDiff[k].sel[1] - 1]
-  endfor
-  let do = split(&diffopt, ',')
-  for n in ['in', 'new']
-    if index(do, 'icase') != -1
-      call map(f_{n}, 'tolower(v:val)')
-    endif
-    if index(do, 'iwhiteall') != -1
-      call map(f_{n}, 'substitute(v:val, "\\s\\+", "", "g")')
-    elseif index(do, 'iwhite') != -1
-      call map(f_{n}, 'substitute(v:val, "\\s\\+", " ", "g")')
-      call map(f_{n}, 'substitute(v:val, "\\s\\+$", "", "")')
-    elseif index(do, 'iwhiteeol') != -1
-      call map(f_{n}, 'substitute(v:val, "\\s\\+$", "", "")')
-    endif
-  endfor
-  let f_out = []
-  let [l1, l2] = [1, 1]
-  for ed in split(s:Diff(f_in, f_new,
-                  \index(do, 'indent-heuristic') != -1), '[+-]\+\zs', 1)[: -2]
-    let [qe, q1, q2] = map(['=', '-', '+'], 'count(ed, v:val)')
-    let [l1, l2] += [qe, qe]
-    let f_out += [((1 < q1) ? l1 . ',' : '') . (l1 + q1 - 1) .
-                                  \((q1 == 0) ? 'a' : (q2 == 0) ? 'd' : 'c') .
-                                  \((1 < q2) ? l2 . ',' : '') . (l2 + q2 - 1)]
-    let [l1, l2] += [q1, q2]
-  endfor
-  call filter(f_out, 'v:val[0] !~ "[<>-]"')
-  for n in range(len(f_out))
-    let [se1, op, se2] = split(substitute(f_out[n], '[acd]', ' & ', ''))
+  let fn = #{0: [], 1: readfile(v:fname_in), 2: readfile(v:fname_new)}
+  if [fn.1, fn.2] == [['line1'], ['line2']]
+    let fn.0 += ['1c1']
+  else
     for k in [1, 2]
-      let se{k} = substitute(se{k}, '\d\+',
-                              \'\= submatch(0) + t:RSDiff[k].sel[0] - 1', 'g')
+      let fn[k] = fn[k][t:RSDiff[k].sel[0] - 1 : t:RSDiff[k].sel[1] - 1]
     endfor
-    let f_out[n] = se1 . op . se2
-  endfor
-  call writefile(f_out, v:fname_out)
+    for [p1, q1, p2, q2] in diffutil#DiffFunc(fn.1, fn.2, diffutil#DiffOpt())
+      let [p1, p2] += [t:RSDiff[1].sel[0], t:RSDiff[2].sel[0]]
+      let fn.0 += [((1 < q1) ? p1 . ',' : '') . (p1 + q1 - 1) .
+                                  \((q1 == 0) ? 'a' : (q2 == 0) ? 'd' : 'c') .
+                                  \((1 < q2) ? p2 . ',' : '') . (p2 + q2 - 1)]
+    endfor
+  endif
+  call writefile(fn.0, v:fname_out)
 endfunction
 
 function! s:RS_ClearDiff(key) abort
@@ -250,22 +222,23 @@ endfunction
 function! s:RS_ToggleEvent(on) abort
   let tv = filter(map(range(1, tabpagenr('$')),
                               \'gettabvar(v:val, "RSDiff")'), '!empty(v:val)')
-  let ac = ['augroup ' . s:RSD, 'autocmd!']
+  let ac = []
   if !empty(tv)
     for tb in tv
       for k in keys(tb)
-        let ac += ['autocmd WinClosed <buffer=' . tb[k].bnr .
-                                          \'> call s:RS_ClearDiff(' . k . ')']
+        let bs = '<buffer=' . tb[k].bnr . '>'
+        let ac += [['WinClosed', bs, 's:RS_ClearDiff(' . k . ')']]
         if len(tb) == 2
-          let ac += ['autocmd TextChanged,InsertLeave <buffer=' . tb[k].bnr .
-                                        \'> call s:RS_RedrawDiff(' . k . ')']
+          let ac += [['TextChanged,InsertLeave', bs,
+                                              \'s:RS_RedrawDiff(' . k . ')']]
         endif
       endfor
     endfor
-    let ac += ['autocmd TabEnter * call s:RS_ToggleDiffexpr(-1)']
+    let ac += [['TabEnter', '*', 's:RS_ToggleDiffexpr(-1)']]
+    call map(ac, 'join(["autocmd", v:val[0], v:val[1], "call", v:val[2]])')
   endif
-  let ac += ['augroup END']
-  if empty(tv) | let ac += ['augroup! ' . s:RSD] | endif
+  let ac = ['augroup ' . s:RSD, 'autocmd!'] + ac + ['augroup END'] +
+                                    \(empty(ac) ? ['augroup! ' . s:RSD] : [])
   call execute(ac)
 endfunction
 
@@ -273,68 +246,37 @@ function! s:RS_DrawClearSel(on, key) abort
   let rd = t:RSDiff[a:key]
   if a:on
     let hl = 'CursorColumn'
-    let ss = substitute(get(t:, 'DiffRangeView',
-                          \get(g:, 'DiffRangeView', 's')), '[^cfsv]', '', 'g')
-    if ss =~ 's'
-      if has('signs') &&
-                      \empty(sign_getplaced(rd.bnr, {'group': '*'})[0].signs)
-        let rd.scl = getwinvar(rd.wid, '&signcolumn')
-        call setwinvar(rd.wid, '&signcolumn', 'no')
-        if empty(sign_getdefined(s:RSD))
-          call sign_define(s:RSD, {'linehl': hl})
+    if has('signs') && empty(sign_getplaced(rd.bnr, #{group: '*'})[0].signs)
+      let rd.scl = getwinvar(rd.wid, '&signcolumn')
+      call setwinvar(rd.wid, '&signcolumn', 'no')
+      if empty(sign_getdefined(s:RSD))
+        call sign_define(s:RSD, #{linehl: hl})
+      endif
+      for ln in range(rd.sel[0], rd.sel[-1])
+        call sign_place(0, s:RSD, s:RSD, rd.bnr, #{lnum: ln})
+      endfor
+    elseif has('textprop')
+      if empty(prop_type_get(s:RSD))
+        call prop_type_add(s:RSD, #{highlight: hl})
+      endif
+      let rd.txp = []
+      for ln in range(rd.sel[0], rd.sel[-1])
+        let ec = has('patch-9.0.1728') ? virtcol([ln, '$'], 0, rd.wid) :
+                                                        \virtcol([ln, '$'], 0)
+        let rd.txp += [prop_add(ln, 1, #{type: s:RSD, bufnr: rd.bnr,
+                                                              \end_col: ec})]
+        if has('patch-9.0.0067')
+          let rd.txp += [prop_add(ln, 0, #{type: s:RSD, bufnr: rd.bnr,
+                                          \text: repeat(' ', &columns - ec)})]
         endif
-        for ln in range(rd.sel[0], rd.sel[-1])
-          call sign_place(0, s:RSD, s:RSD, rd.bnr, {'lnum': ln})
-        endfor
-      else
-        let ss = substitute(ss, 's', '', 'g')
-      endif
-    endif
-    if ss =~ 'v'
-      let tx = '+'
-      if has('textprop') && has('patch-9.0.0121')
-        if empty(prop_type_get(s:RSD))
-          call prop_type_add(s:RSD, {'highlight': hl})
-        endif
-        let rd.vtx = []
-        for ln in range(rd.sel[0], rd.sel[-1])
-          let rd.vtx += [prop_add(ln, 1, {'type': s:RSD, 'bufnr': rd.bnr,
-                                                              \'text': tx})]
-          let rd.vtx += [prop_add(ln, 0, {'type': s:RSD, 'bufnr': rd.bnr,
-                                        \'text': tx, 'text_align': 'right'})]
-        endfor
-      elseif exists('*nvim_buf_set_extmark')
-        let rd.vtx = {'ns': nvim_create_namespace(s:RSD), 'id': []}
-        for ln in range(rd.sel[0], rd.sel[-1])
-          let rd.vtx.id += [nvim_buf_set_extmark(rd.bnr, rd.vtx.ns, ln - 1, 0,
-                        \{'virt_text': [[tx, hl]], 'virt_text_win_col': -99})]
-          let rd.vtx.id += [nvim_buf_set_extmark(rd.bnr, rd.vtx.ns, ln - 1, 0,
-                  \{'virt_text': [[tx, hl]], 'virt_text_pos': 'right_align'})]
-        endfor
-      else
-        let ss = substitute(ss, 'v', '', 'g')
-      endif
-    endif
-    if ss =~ 'c'
-      if has('conceal')
-        let rd.cid = s:Matchaddpos('Conceal', range(1, rd.sel[0] - 1) +
-                              \range(rd.sel[-1] + 1, line('$')), -10, rd.wid)
-      else
-        let ss = substitute(ss, 'c', '', 'g')
-      endif
-    endif
-    if ss =~ 'f'
-      if has('folding')
-        let rd.fdm = getwinvar(rd.wid, '&foldmethod')
-        call setwinvar(rd.wid, '&foldmethod', 'manual')
-        call execute(['normal zE'] +
-                \((1 < rd.sel[0]) ? ['1,' . (rd.sel[0] - 1) . 'fold'] : []) +
-            \((rd.sel[-1] < line('$')) ? [(rd.sel[-1] + 1) . ',$fold'] : []))
-      else
-        let ss = substitute(ss, 'f', '', 'g')
-      endif
-    endif
-    if empty(ss)
+      endfor
+    elseif has('nvim-0.7.0')
+      let rd.ext = #{ns: nvim_create_namespace(s:RSD), id: []}
+      for ln in range(rd.sel[0], rd.sel[-1])
+        let rd.ext.id += [nvim_buf_set_extmark(rd.bnr, rd.ext.ns, ln - 1, 0,
+                                                      \#{line_hl_group: hl})]
+      endfor
+    else
       let dc89 = !exists('g:loaded_diffchar') ||
             \type(g:loaded_diffchar) != type(0.0) || g:loaded_diffchar >= 8.9
       let rd.lid = s:Matchaddpos(hl, range(rd.sel[0], rd.sel[-1]),
@@ -342,46 +284,37 @@ function! s:RS_DrawClearSel(on, key) abort
     endif
   else
     if has_key(rd, 'scl')
-      call sign_unplace(s:RSD, {'buffer': rd.bnr})
+      call sign_unplace(s:RSD, #{buffer: rd.bnr})
       if empty(filter(range(1, bufnr('$')), 'bufnr(v:val) != -1 &&
-                  \!empty(sign_getplaced(v:val, {"group": s:RSD})[0].signs)'))
+                  \!empty(sign_getplaced(v:val, #{group: s:RSD})[0].signs)'))
         call sign_undefine(s:RSD)
       endif
       call setwinvar(rd.wid, '&signcolumn', rd.scl)
       unlet rd.scl
-    endif
-    if has_key(rd, 'vtx')
-      if has('textprop')
-        for id in rd.vtx
-          call prop_remove({'type': s:RSD, 'id': id, 'both': 1,
-                                                  \'bufnr': rd.bnr, 'all': 1})
-        endfor
-        if empty(filter(range(1, bufnr('$')), 'bufnr(v:val) != -1 &&
-            \!empty(prop_find({"type": s:RSD, "bufnr": v:val, "lnum": 1}))'))
-          call prop_type_delete(s:RSD)
-        endif
-      else
-        for id in rd.vtx.id
-          call nvim_buf_del_extmark(rd.bnr, rd.vtx.ns, id)
-        endfor
+    elseif has_key(rd, 'txp')
+      for id in rd.txp
+        call prop_remove(#{type: s:RSD, id: id, both: 1, bufnr: rd.bnr,
+                                                                    \all: 1})
+      endfor
+      if empty(filter(range(1, bufnr('$')), 'bufnr(v:val) != -1 &&
+                  \!empty(prop_find(#{type: s:RSD, bufnr: v:val, lnum: 1}))'))
+        call prop_type_delete(s:RSD)
       endif
-      unlet rd.vtx
-    endif
-    if has_key(rd, 'cid')
-      call s:Matchdelete(rd.cid, rd.wid) | unlet rd.cid
-    endif
-    if has_key(rd, 'fdm')
-      call execute('normal zE')
-      call setwinvar(rd.wid, '&foldmethod', rd.fdm) | unlet rd.fdm
-    endif
-    if has_key(rd, 'lid')
-      call s:Matchdelete(rd.lid, rd.wid) | unlet rd.lid
+      unlet rd.txp
+    elseif has_key(rd, 'ext')
+      for id in rd.ext.id
+        call nvim_buf_del_extmark(rd.bnr, rd.ext.ns, id)
+      endfor
+      unlet rd.ext
+    elseif has_key(rd, 'lid')
+      call s:Matchdelete(rd.lid, rd.wid)
+      unlet rd.lid
     endif
   endif
 endfunction
 
 " --------------------------------------
-" A Visual Area SpotDiff
+" a visual area selectable spotdiff
 " --------------------------------------
 let s:VSD = 'v_spotdiff'
 
@@ -396,7 +329,7 @@ function! spotdiff#VDiffthis(sl, el, ll) abort
   let vm = ([a:sl, a:el] == [line("'<"), line("'>")]) ? visualmode() : ''
   let tc = 0
   let se = []
-  for ln in range(a:sl, a:el)
+  for ln in filter(range(a:sl, a:el), '1 <= v:val && v:val <= line("$")')
     let st = getbufline(cb, ln)[0]
     if empty(st)
       let [sc, ec] = [0, 0]
@@ -441,7 +374,7 @@ function! spotdiff#VDiffthis(sl, el, ll) abort
     endfor
   endif
   " do diffthis
-  let t:VSDiff[k] = {'wid': cw, 'bnr': cb, 'sel': se, 'vmd': vm, 'lbl': a:ll}
+  let t:VSDiff[k] = #{wid: cw, bnr: cb, sel: se, vmd: vm, lbl: a:ll}
   call s:VS_DrawClearSel(1, k)
   if len(t:VSDiff) == 2 | call s:VS_DoDiff() | endif
   call s:VS_ToggleMap(1)
@@ -449,13 +382,14 @@ function! spotdiff#VDiffthis(sl, el, ll) abort
 endfunction
 
 function! s:VS_DoDiff() abort
-  " set diffopt flags for icase/iwhite/indent
-  let do = split(&diffopt, ',')
-  let igc = (index(do, 'icase') != -1)
-  let igw = (index(do, 'iwhiteall') != -1) ? 1 :
-                                      \(index(do, 'iwhite') != -1) ? 2 :
-                                      \(index(do, 'iwhiteeol') != -1) ? 3 : 0
-  let idh = (index(do, 'indent-heuristic') != -1)
+  let op = diffutil#DiffOpt()
+  let iw = has('nvim') ? ['ignore_whitespace', 'ignore_whitespace_change',
+                                        \'ignore_whitespace_change_at_eol'] :
+                                        \['iwhiteall', 'iwhite', 'iwhiteeol']
+  let igw = 0
+  for ix in range(len(iw))
+    if has_key(op, iw[ix]) | let igw = ix + 1 | break | endif
+  endfor
   " set regular expression to split diff unit
   let du = get(t:, 'DiffUnit', get(g:, 'DiffUnit', 'Word1'))
   if du == 'Char'
@@ -538,12 +472,12 @@ function! s:VS_DoDiff() abort
   let lm = (t:VSDiff[1].lbl && t:VSDiff[2].lbl) ?
                     \min([t:VSDiff[1].sel[-1][0] - t:VSDiff[1].sel[0][0] + 1,
                     \t:VSDiff[2].sel[-1][0] - t:VSDiff[2].sel[0][0] + 1]) : 1
-  let hp = {1: {}, 2: {}}
+  let hp = #{1: {}, 2: {}}
   for k in [1, 2] | let t:VSDiff[k].pos = [] | endfor
   for ic in range(lm)
-    let lct = {1: [], 2: []}
+    let lct = #{1: [], 2: []}
     for k in [1, 2]
-      let lb = (&joinspaces && !t:VSDiff[k].lbl) ? nr2char(0xff) : ''
+      let lb = t:VSDiff[k].lbl ? '' : nr2char(0xff)
       " split line and set its position
       for [ln, sc, ec] in (t:VSDiff[k].lbl) ? [t:VSDiff[k].sel[ic]] :
                                                               \t:VSDiff[k].sel
@@ -551,7 +485,6 @@ function! s:VS_DoDiff() abort
         if empty(st)
           let lct[k] += [[[ln, 0, 0], '']]
         else
-          if igc | let st = tolower(st) | endif
           for tx in split(st, sre)
             let tl = len(tx)
             let lct[k] += [[[ln, sc, tl], tx]]
@@ -592,36 +525,32 @@ function! s:VS_DoDiff() abort
       endif
     endfor
     " compare both diff units
-    let es = s:Diff(map(copy(lct[1]), 'v:val[1]'),
-                                          \map(copy(lct[2]), 'v:val[1]'), idh)
-    " set highlight positions
-    let cn = 0 | let [p1, p2] = [0, 0]
-    for ed in split(es, '[+-]\+\zs', 1)[: -2]
-      let [qe, q1, q2] = map(['=', '-', '+'], 'count(ed, v:val)')
-      if 0 < qe | let [p1, p2] += [qe, qe] | endif
-      if 0 < q1 && 0 < q2
+    let cn = 0
+    for pq in diffutil#DiffFunc(map(copy(lct[1]), 'v:val[1]'),
+                                          \map(copy(lct[2]), 'v:val[1]'), op)
+      let [p, q] = [#{1: pq[0], 2: pq[2]}, #{1: pq[1], 2: pq[3]}]
+      if 0 < q.1 && 0 < q.2
         let hl = hcu[cn % len(hcu)] | let cn += 1
       else
         let hl = 'DiffAdd'
       endif
-      let [h1, h2] = [hl, hl]
+      let h = #{1: hl, 2: hl}
       for k in [1, 2]
         let mx = []
-        if 0 < q{k}   " add or change
-          for ix in range(p{k}, p{k} + q{k} - 1)
+        if 0 < q[k]   " add or change
+          for ix in range(p[k], p[k] + q[k] - 1)
             let mx += [lct[k][ix][0]]
           endfor
-          let p{k} += q{k}
         else          " delete
-          let h{k} = 'vsDiffChangeBU'
-          if 0 < p{k}
-            let po = lct[k][p{k} - 1][0]
-            let bl = len(matchstr(lct[k][p{k} - 1][1], '.$'))
+          let h[k] = 'vsDiffChangeBU'
+          if 0 < p[k]
+            let po = lct[k][p[k] - 1][0]
+            let bl = len(matchstr(lct[k][p[k] - 1][1], '.$'))
             let mx += [[po[0], po[1] + po[2] - bl, bl]]
           endif
-          if p{k} < len(lct[k])
-            let po = lct[k][p{k}][0]
-            let bl = len(matchstr(lct[k][p{k}][1], '^.'))
+          if p[k] < len(lct[k])
+            let po = lct[k][p[k]][0]
+            let bl = len(matchstr(lct[k][p[k]][1], '^.'))
             let mx += [[po[0], po[1], bl]]
           endif
         endif
@@ -635,8 +564,8 @@ function! s:VS_DoDiff() abort
           endif
         endfor
         let lx = map(items(lc), '[eval(v:val[0])] + v:val[1]')
-        if !has_key(hp[k], h{k}) | let hp[k][h{k}] = [] | endif
-        let hp[k][h{k}] += lx
+        if !has_key(hp[k], h[k]) | let hp[k][h[k]] = [] | endif
+        let hp[k][h[k]] += lx
         " set highlighted positions to show diff pair
         if 1 < len(lx) | call sort(lx, {i, j -> i[0] - j[0]}) | endif
         let t:VSDiff[k].pos += [lx]
@@ -735,87 +664,102 @@ function! spotdiff#VDiffOpFunc(vm, lbl) abort
   call spotdiff#VDiffthis(line("'<"), line("'>"), a:lbl)
 endfunction
 
-function! s:VS_ClearDiff(key) abort
-  let cw = win_getid()
-  noautocmd call win_gotoid(str2nr(expand('<amatch>')))
-  call spotdiff#VDiffoff(0)
-  noautocmd call win_gotoid(cw)
+function! s:VS_ClearDiff() abort
+  let ew = eval(expand('<amatch>'))
+  let tn = win_id2tabwin(ew)[0]
+  if 0 < tn
+    let vs = gettabvar(tn, 'VSDiff', {})
+    let kn = filter([1, 2], 'has_key(vs, v:val) && vs[v:val].wid == ew')
+    if 0 < len(kn)
+      let cw = win_getid()
+      noautocmd call win_gotoid(ew)
+      call spotdiff#VDiffoff(len(kn) == 2)
+      noautocmd call win_gotoid(cw)
+    endif
+  endif
 endfunction
 
-function! s:VS_RedrawDiff(key) abort
+function! s:VS_RedrawDiff() abort
   call spotdiff#VDiffupdate()
 endfunction
 
+let s:vsmap = map({'[b': ['JumpDiffCharPrevStart', 'VS_JumpDiff(0)'],
+                  \']b': ['JumpDiffCharNextStart', 'VS_JumpDiff(1)'],
+                  \'[e': ['JumpDiffCharPrevEnd', 'VS_JumpDiff(2)'],
+                  \']e': ['JumpDiffCharNextEnd', 'VS_JumpDiff(3)']},
+            \'["<Plug>" . v:val[0], ":<C-U>call <SID>" . v:val[1] . "<CR>"]')
+
 if exists('g:loaded_diffchar')
-  let s:vs_map =
-    \{'<Plug>JumpDiffCharPrevStart': ':call <SID>VS_JumpDiff(0, 0)<CR>',
-    \'<Plug>JumpDiffCharNextStart': ':call <SID>VS_JumpDiff(1, 0)<CR>',
-    \'<Plug>JumpDiffCharPrevEnd': ':call <SID>VS_JumpDiff(0, 1)<CR>',
-    \'<Plug>JumpDiffCharNextEnd': ':call <SID>VS_JumpDiff(1, 1)<CR>'}
-  call map(s:vs_map, '[maparg(v:key, "n"), v:val]')
+  for s:key in keys(s:vsmap)
+    let [s:plg, s:cmd] = s:vsmap[s:key]
+    let s:vsmap[s:plg] = [maparg(s:plg, 'n'), s:cmd]
+    unlet s:vsmap[s:key]
+  endfor
+
   function! s:VS_ToggleMap(on) abort
     let vd = exists('t:VSDiff') && len(t:VSDiff) == 2
     let rn = (a:on == 0 && vd || a:on == -1 && !vd) ? 0 :
                               \(a:on == 1 && vd || a:on == -1 && vd) ? 1 : -1
     if rn != -1
-      call execute(map(items(s:vs_map),
+      call execute(map(items(s:vsmap),
                     \'"nnoremap <silent> " . v:val[0] . " " . v:val[1][rn]'))
     endif
   endfunction
 else
-  for [key, plg, cmd] in [
-    \['[b', '<Plug>JumpDiffCharPrevStart', ':call <SID>VS_JumpDiff(0, 0)'],
-    \[']b', '<Plug>JumpDiffCharNextStart', ':call <SID>VS_JumpDiff(1, 0)'],
-    \['[e', '<Plug>JumpDiffCharPrevEnd', ':call <SID>VS_JumpDiff(0, 1)'],
-    \[']e', '<Plug>JumpDiffCharNextEnd', ':call <SID>VS_JumpDiff(1, 1)']]
-    if !hasmapto(plg, 'n') && empty(maparg(key, 'n'))
+  for s:key in keys(s:vsmap)
+    let [s:plg, s:cmd] = s:vsmap[s:key]
+    if !hasmapto(s:plg, 'n') && maparg(s:key, 'n') =~ '^$\|_defaults.lua'
       if get(g:, 'DiffCharDoMapping', 1) && get(g:, 'VDiffDoMapping', 1)
-        call execute('nmap <silent> ' . key . ' ' . plg)
+        call execute('nmap <silent> ' . s:key . ' ' . s:plg)
       endif
     endif
-    call execute('nnoremap <silent> ' . plg . ' ' . cmd . '<CR>')
+    call execute('nnoremap <silent> ' . s:plg . ' ' . s:cmd)
   endfor
+  unlet s:vsmap
+
   function! s:VS_ToggleMap(on) abort
   endfunction
 endif
 
-function! s:VS_JumpDiff(dir, pos) abort
-  " a:dir : 0 = backward, 1 = forward / a:pos : 0 = start, 1 = end
+function! s:VS_JumpDiff(dp) abort
+  " a:dp : 0=backward/start, 1=forward/start, 2=backward/end, 3=forward/end
   if !exists('t:VSDiff') || len(t:VSDiff) != 2 | return | endif
-  let sk = filter(keys(t:VSDiff), 't:VSDiff[v:val].wid == win_getid()')
+  let sk = filter(#{1: [], 2: []}, 't:VSDiff[v:key].wid == win_getid()')
   if empty(sk) | return | endif
+  let [dir, pos] = (a:dp == 0) ? [0, 0] : (a:dp == 1) ? [1, 0] :
+                                                \(a:dp == 2) ? [0, 1] : [1, 1]
   let [cl, cc] = [line('.'), col('.')]
   if cc == col('$')     " empty line
-    if !a:dir | let cc = 0 | endif
+    if !dir | let cc = 0 | endif
   else
-    if a:pos
+    if pos
       let cc += len(strcharpart(getline(cl)[cc - 1 :], 0, 1)) - 1
     endif
   endif
-  let ss = 0
-  for k in sk
-    for ix in a:dir ? range(len(t:VSDiff[k].sel)) :
+  for k in keys(sk)
+    for ix in dir ? range(len(t:VSDiff[k].sel)) :
                                       \range(len(t:VSDiff[k].sel) - 1, 0, -1)
       let sl = t:VSDiff[k].sel[ix]
-      if a:dir ? (cl < sl[0] || cl == sl[0] && cc <= sl[2]) :
+      if dir ? (cl < sl[0] || cl == sl[0] && cc <= sl[2]) :
                                   \(cl > sl[0] || cl == sl[0] && cc >= sl[1])
-        let s{k} = sl
-        let ss += k
+        let sk[k] = sl
         break
       endif
     endfor
+    if empty(sk[k]) | unlet sk[k] | endif
   endfor
-  let sk = (ss == 0) ? [] : (ss == 1) ? [1] : (ss == 2) ? [2] :
-                \(a:dir ? (s1[0] < s2[0] || s1[0] == s2[0] && s1[1] < s2[1]) :
-        \(s1[0] > s2[0] || s1[0] == s2[0] && s1[1] > s2[1])) ? [1, 2] : [2, 1]
-  for k in sk
-    for pn in a:dir ? (range(has_key(t:VSDiff[k], 'pvn') ?
-      \t:VSDiff[k].pvn + (a:pos ? 0 : 1) : 0, len(t:VSDiff[k].pos) - 1, 1)) :
-                      \(range(has_key(t:VSDiff[k], 'pvn') ?
-      \t:VSDiff[k].pvn + (a:pos ? -1 : 0) : len(t:VSDiff[k].pos) - 1, 0, -1))
-      let ps = t:VSDiff[k].pos[pn][a:pos ? -1 : 0]
-      let [nl, nc] = [ps[0], a:pos ? ps[1] + ps[2] - 1 : ps[1]]
-      if a:dir ? (cl < nl || cl == nl && cc < nc) :
+  for k in (len(keys(sk)) < 2) ? keys(sk) :
+      \(dir ? (sk.1[0] < sk.2[0] || sk.1[0] == sk.2[0] && sk.1[1] < sk.2[1]) :
+            \(sk.1[0] > sk.2[0] || sk.1[0] == sk.2[0] && sk.1[1] > sk.2[1])) ?
+                                                              \[1, 2] : [2, 1]
+    for pn in dir ? (range(has_key(t:VSDiff[k], 'pvn') ?
+        \t:VSDiff[k].pvn + (pos ? 0 : 1) : 0, len(t:VSDiff[k].pos) - 1, 1)) :
+                    \(range(has_key(t:VSDiff[k], 'pvn') ?
+        \t:VSDiff[k].pvn + (pos ? -1 : 0) : len(t:VSDiff[k].pos) - 1, 0, -1))
+      let ps = t:VSDiff[k].pos[pn][pos ? -1 : 0]
+      let [nl, nc] = [ps[0], pos ? ps[1] + ps[2] - 1 : ps[1]]
+      let nc = min([nc, col([nl, '$']) - 1])
+      if dir ? (cl < nl || cl == nl && cc < nc) :
                                             \(cl > nl || cl == nl && cc > nc)
         call cursor(nl, nc)
         return
@@ -824,69 +768,73 @@ function! s:VS_JumpDiff(dir, pos) abort
   endfor
 endfunction
 
-function! s:VS_DiffPair(key, event) abort
+function! s:VS_DiffPair(event) abort
   " a:event : 0 = WinLeave, 1 = CursorMoved
   if !exists('t:VSDiff') || len(t:VSDiff) != 2 | return | endif
   let [cl, cc] = [line('.'), col('.')]
-  let bkey = (a:key == 1) ? 2 : 1
-  if has_key(t:VSDiff[a:key], 'pvn')
-    if a:event
-      for ps in t:VSDiff[a:key].pos[t:VSDiff[a:key].pvn]
-        if cl == ps[0] && ps[1] <= cc && cc <= ps[1] + ps[2] - 1
-          return
-        endif
-      endfor
-    endif
-    unlet t:VSDiff[a:key].pvn
-    call s:Matchdelete(t:VSDiff[bkey].pid, t:VSDiff[bkey].wid)
-    unlet t:VSDiff[bkey].pid
-  endif
-  if a:event
-    if t:VSDiff[a:key].sel[0][0] <= cl && cl <= t:VSDiff[a:key].sel[-1][0]
-      let pn = len(t:VSDiff[a:key].pos) - 1
-      while 0 <= pn
-        for ps in t:VSDiff[a:key].pos[pn]
+  for ak in filter([1, 2], 't:VSDiff[v:val].wid == win_getid()')
+    let bk = (ak == 1) ? 2 : 1
+    if has_key(t:VSDiff[ak], 'pvn')
+      if a:event
+        for ps in t:VSDiff[ak].pos[t:VSDiff[ak].pvn]
           if cl == ps[0] && ps[1] <= cc && cc <= ps[1] + ps[2] - 1
-            let t:VSDiff[a:key].pvn = pn
-            let t:VSDiff[bkey].pid = s:Matchaddpos(has('nvim') ?
-                  \'TermCursor' : has('gui_running') ? 'Cursor' : 'IncSearch',
-                            \t:VSDiff[bkey].pos[pn], -1, t:VSDiff[bkey].wid)
-            let pn = 0
-            break
+            return
           endif
         endfor
-        let pn -= 1
-      endwhile
+      endif
+      unlet t:VSDiff[ak].pvn
+      call s:Matchdelete(t:VSDiff[bk].pid, t:VSDiff[bk].wid)
+      unlet t:VSDiff[bk].pid
     endif
-  endif
+    if a:event
+      if t:VSDiff[ak].sel[0][0] <= cl && cl <= t:VSDiff[ak].sel[-1][0]
+        let pn = len(t:VSDiff[ak].pos) - 1
+        while 0 <= pn
+          for ps in t:VSDiff[ak].pos[pn]
+            if cl == ps[0] && ps[1] <= cc && cc <= ps[1] + ps[2] - 1
+              let t:VSDiff[ak].pvn = pn
+              let t:VSDiff[bk].pid = s:Matchaddpos(has('nvim') ?
+                  \'TermCursor' : has('gui_running') ? 'Cursor' : 'IncSearch',
+                                  \t:VSDiff[bk].pos[pn], -1, t:VSDiff[bk].wid)
+              let pn = 0
+              break
+            endif
+          endfor
+          let pn -= 1
+        endwhile
+      endif
+    endif
+  endfor
 endfunction
 
 function! s:VS_ToggleEvent(on) abort
   let tv = filter(map(range(1, tabpagenr('$')),
                               \'gettabvar(v:val, "VSDiff")'), '!empty(v:val)')
-  let ac = ['augroup ' . s:VSD, 'autocmd!']
+  let ac = []
   if !empty(tv)
     for tb in tv
+      let bn = 0
       for k in keys(tb)
-        let ac += ['autocmd WinClosed <buffer=' . tb[k].bnr .
-                                          \'> call s:VS_ClearDiff(' . k . ')']
-        if len(tb) == 2
-          let ac += ['autocmd TextChanged,InsertLeave <buffer=' . tb[k].bnr .
-                                        \'> call s:VS_RedrawDiff(' . k . ')']
-          if get(t:, 'DiffPairVisible', get(g:, 'DiffPairVisible', 1))
-            let ac += ['autocmd CursorMoved <buffer=' . tb[k].bnr .
-                                        \'> call s:VS_DiffPair(' . k . ', 1)']
-            let ac += ['autocmd WinLeave <buffer=' . tb[k].bnr .
-                                        \'> call s:VS_DiffPair(' . k . ', 0)']
+        if bn != tb[k].bnr
+          let bn = tb[k].bnr
+          let bs = '<buffer=' . bn . '>'
+          let ac += [['WinClosed', bs, 's:VS_ClearDiff()']]
+          if len(tb) == 2
+            let ac += [['TextChanged,InsertLeave', bs, 's:VS_RedrawDiff()']]
+            if get(t:, 'DiffPairVisible', get(g:, 'DiffPairVisible', 1))
+              let ac += [['CursorMoved', bs, 's:VS_DiffPair(1)']]
+              let ac += [['WinLeave', bs, 's:VS_DiffPair(0)']]
+            endif
           endif
         endif
       endfor
     endfor
-    let ac += ['autocmd ColorScheme * call s:VS_ToggleHL(1)']
-    let ac += ['autocmd TabEnter * call s:VS_ToggleMap(-1)']
+    let ac += [['ColorScheme', '*', 's:VS_ToggleHL(1)']]
+    let ac += [['TabEnter', '*', 's:VS_ToggleMap(-1)']]
+    call map(ac, 'join(["autocmd", v:val[0], v:val[1], "call", v:val[2]])')
   endif
-  let ac += ['augroup END']
-  if empty(tv) | let ac += ['augroup! ' . s:VSD] | endif
+  let ac = ['augroup ' . s:VSD, 'autocmd!'] + ac + ['augroup END'] +
+                                    \(empty(ac) ? ['augroup! ' . s:VSD] : [])
   call execute(ac)
 endfunction
 
@@ -967,113 +915,12 @@ function! s:ColorClass(cn, lv) abort
 endfunction
 
 " --------------------------------------
-" Common
+" common
 " --------------------------------------
-
-function! s:TraceDiffChar(u1, u2, ih) abort
-  " An O(NP) Sequence Comparison Algorithm
-  let [u1, u2, eq, e1, e2] = [a:u1, a:u2, '=', '-', '+']
-  let [n1, n2] = [len(u1), len(u2)]
-  if u1 ==# u2 | return repeat(eq, n1)
-  elseif n1 == 0 | return repeat(e2, n2)
-  elseif n2 == 0 | return repeat(e1, n1)
-  endif
-  let [N, M, u1, u2] = (n1 >= n2) ? [n1, n2, u1, u2] : [n2, n1, u2, u1]
-  if n1 < n2 | let [e1, e2] = [e2, e1] | endif
-  let D = N - M
-  let fp = repeat([-1], M + N + 1)
-  let etree = []    " [next edit, previous p, previous k]
-  let p = -1
-  while fp[D] != N
-    let p += 1
-    let epk = repeat([[]], p * 2 + D + 1)
-    for k in range(-p, D - 1, 1) + range(D + p, D, -1)
-      let [y, epk[k]] = (fp[k - 1] + 1 > fp[k + 1]) ?
-                        \[fp[k - 1] + 1, [e1, [(k > D) ? p - 1 : p, k - 1]]] :
-                        \[fp[k + 1], [e2, [(k < D) ? p - 1 : p, k + 1]]]
-      let x = y - k
-      while x < M && y < N && u2[x] ==# u1[y]
-        let epk[k][0] .= eq | let [x, y] += [1, 1]
-      endwhile
-      let fp[k] = y
-    endfor
-    let etree += [epk]
-  endwhile
-  let ses = ''
-  while 1
-    let ses = etree[p][k][0] . ses
-    if [p, k] == [0, 0] | break | endif
-    let [p, k] = etree[p][k][1]
-  endwhile
-  let ses = ses[1 :]
-  return a:ih ? s:ReduceDiffHunk(a:u1, a:u2, ses) : ses
-endfunction
-
-function! s:ReduceDiffHunk(u1, u2, ses) abort
-  " in ==++++/==----, if == units equal to last ++/-- units, swap their SESs
-  " (AB vs AxByAB : =+=+++ -> =++++= -> ++++==)
-  let [eq, e1, e2] = ['=', '-', '+']
-  let [p1, p2] = [-1, -1] | let ses = '' | let ez = ''
-  for ed in reverse(split(a:ses, '[+-]\+\zs'))
-    let es = ed . ez | let ez = '' | let qe = count(es, eq)
-    if 0 < qe
-      let [q1, q2] = [count(es, e1), count(es, e2)]
-      let [uu, pp, qq] = (qe <= q1 && q2 == 0) ? [a:u1, p1, q1] :
-                        \(q1 == 0 && qe <= q2) ? [a:u2, p2, q2] : [[], 0, 0]
-      if !empty(uu) && uu[pp - qq - qe + 1 : pp - qq] ==# uu[pp - qe + 1 : pp]
-        let ez = es[-qe :] . es[qe : -qe - 1] | let es = es[: qe - 1]
-      else
-        let [p1, p2] -= [q1, q2]
-      endif
-    endif
-    let [p1, p2] -= [qe, qe]
-    let ses = es . ses
-  endfor
-  let ses = ez . ses
-  return ses
-endfunction
-
-let s:Diff = function('s:TraceDiffChar')
-if get(g:, 'BuiltinDiffFunc', 0) &&
-                      \(has('nvim') ? type(luaeval('vim.diff')) == v:t_func :
-                                    \exists('*diff') && has('patch-9.1.0099'))
-  function! s:ApplyDiffFunc(u1, u2, ih) abort
-    let [eq, e1, e2] = ['=', '-', '+']
-    let [n1, n2] = [len(a:u1), len(a:u2)]
-    if a:u1 ==# a:u2 | return repeat(eq, n1)
-    elseif n1 == 0 | return repeat(e2, n2)
-    elseif n2 == 0 | return repeat(e1, n1)
-    endif
-    let ses = ''
-    let vd = s:DiffFunc(a:u1, a:u2)
-    if !empty(vd)
-      let p1 = 0
-      for [i1, c1, i2, c2] in vd + [[n1, 0, 0, 0]]
-        let ses .= repeat(eq, i1 - p1) . repeat(e1, c1) . repeat(e2, c2)
-        let p1 = i1 + c1
-      endfor
-    endif
-    return a:ih ? s:ReduceDiffHunk(a:u1, a:u2, ses) : ses
-  endfunction
-  let s:Diff = function('s:ApplyDiffFunc')
-  if has('nvim')
-    function! s:DiffFunc(u1, u2) abort
-      return map(v:lua.vim.diff(join(a:u1, "\n") . "\n",
-                        \join(a:u2, "\n") . "\n", #{result_type: 'indices'}),
-                            \'[v:val[0] - ((0 < v:val[1]) ? 1 : 0), v:val[1],
-                            \v:val[2] - ((0 < v:val[3]) ? 1 : 0), v:val[3]]')
-    endfunction
-  else
-    function! s:DiffFunc(u1, u2) abort
-      return map(diff(a:u1, a:u2, #{output: 'indices'}),
-          \'[v:val.from_idx, v:val.from_count, v:val.to_idx, v:val.to_count]')
-    endfunction
-  endif
-endif
 
 function! s:Matchaddpos(grp, pos, pri, wid) abort
   return map(range(0, len(a:pos) - 1, 8), 'matchaddpos(a:grp,
-                    \a:pos[v:val : v:val + 7], a:pri, -1, {"window": a:wid})')
+                    \a:pos[v:val : v:val + 7], a:pri, -1, #{window: a:wid})')
 endfunction
 
 function! s:Matchdelete(id, wid) abort

@@ -1,15 +1,16 @@
 " spotdiff.vim : A range and area selectable diffthis to compare partially
 "
-" Last Change: 2024/06/23
-" Version:     5.2
+" Last Change: 2025/10/23
+" Version:     6.0
 " Author:      Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
-" Copyright:   (c) 2014-2024 by Rick Howe
+" Copyright:   (c) 2014-2025 by Rick Howe
 " License:     MIT
 
-if exists('g:loaded_spotdiff') || !has('diff') || !exists('##WinClosed')
+if exists('g:loaded_spotdiff') || !has('diff') ||
+                                      \(v:version < 900 && !has('nvim-0.7.0'))
   finish
 endif
-let g:loaded_spotdiff = 5.2
+let g:loaded_spotdiff = 6.0
 
 let s:save_cpo = &cpoptions
 set cpo&vim
@@ -23,27 +24,24 @@ command! -range -bang -bar
 command! -bang -bar VDiffoff call spotdiff#VDiffoff(<bang>0)
 command! -bar VDiffupdate call spotdiff#VDiffupdate()
 
-for [mod, key, plg, cmd] in [
-  \['v', '<Leader>t', '<Plug>(VDiffthis)',
-          \':<C-U>call spotdiff#VDiffthis(line("''<"), line("''>"), 0)<CR>'],
-  \['v', '<Leader>T', '<Plug>(VDiffthis!)',
-          \':<C-U>call spotdiff#VDiffthis(line("''<"), line("''>"), 1)<CR>'],
-  \['n', '<Leader>o', '<Plug>(VDiffoff)',
-                                      \':<C-U>call spotdiff#VDiffoff(0)<CR>'],
-  \['n', '<Leader>O', '<Plug>(VDiffoff!)',
-                                      \':<C-U>call spotdiff#VDiffoff(1)<CR>'],
-  \['n', '<Leader>u', '<Plug>(VDiffupdate)',
-                                    \':<C-U>call spotdiff#VDiffupdate()<CR>'],
-  \['n', '<Leader>t', '<Plug>(VDiffthis)',
-                        \':let &operatorfunc = ''<SID>VDiffOpFunc0''<CR>g@'],
-  \['n', '<Leader>T', '<Plug>(VDiffthis!)',
-                        \':let &operatorfunc = ''<SID>VDiffOpFunc1''<CR>g@']]
-  if !hasmapto(plg, mod) && empty(maparg(key, mod))
+for [s:mod, s:key, s:plg, s:cmd] in [
+        \['v', 't', 'VDiffthis', '#VDiffthis(line("''<"), line("''>"), 0)'],
+        \['v', 'T', 'VDiffthis!', '#VDiffthis(line("''<"), line("''>"), 1)'],
+        \['n', 'o', 'VDiffoff', '#VDiffoff(0)'],
+        \['n', 'O', 'VDiffoff!', '#VDiffoff(1)'],
+        \['n', 'u', 'VDiffupdate', '#VDiffupdate()'],
+        \['n', 't', 'VDiffthis', 'VDiffOpFunc0'],
+        \['n', 'T', 'VDiffthis!', 'VDiffOpFunc1']]
+  let s:key = '<Leader>' . s:key
+  let s:plg = '<Plug>(' . s:plg . ')'
+  let s:cmd = (s:cmd[0] == '#') ? ':<C-U>call spotdiff' . s:cmd . '<CR>' :
+                    \':<C-U>let &operatorfunc = ''<SID>' . s:cmd . '''<CR>g@'
+  if !hasmapto(s:plg, s:mod) && empty(maparg(s:key, s:mod))
     if get(g:, 'VDiffDoMapping', 1)
-      call execute(mod . 'map <silent> ' . key . ' ' . plg)
+      call execute(s:mod . 'map <silent> ' . s:key . ' ' . s:plg)
     endif
   endif
-  call execute(mod . 'noremap <silent> ' . plg . ' ' . cmd)
+  call execute(s:mod . 'noremap <silent> ' . s:plg . ' ' . s:cmd)
 endfor
 
 function! s:VDiffOpFunc0(vm) abort

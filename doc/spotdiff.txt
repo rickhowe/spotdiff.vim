@@ -1,9 +1,9 @@
 *spotdiff.txt*  A range and area selectable `:diffthis` to compare partially
 
-Last Change: 2024/06/23
-Version:     5.2
+Last Change: 2025/10/23
+Version:     6.0
 Author:      Rick Howe (Takumi Ohtani) <rdcxy754@ybb.ne.jp>
-Copyright:   (c) 2014-2024 by Rick Howe
+Copyright:   (c) 2014-2025 by Rick Howe
 License:     MIT
 
 INTRODUCTION                                            *spotdiff*
@@ -186,18 +186,23 @@ Keymaps ~
 ==============================================================================
 CHANGE HISTORY                                          *spotdiff-history*
 
-Update : 5.2
+6.0
+* Updated to support vim 9.0 and nvim 0.7.0 or later with major internal
+  changes.
+* Fixed some defects including E957 and E734 errors on nvim 0.10.0 or later.
+
+5.2
 * Implemented to update the differences shortly after the text is changed.
 
-Update : 5.1
+5.1
 * Added to open a temporary new window at left or right in |:Diffthis| command
   if "vertical" is included in the 'diffopt' option.
 
-Update : 5.0
+5.0
 * Changed to support vim 8.2 and nvim 0.4.4 or later.
 * Added some minor changes such as an error check in `:Diffthis` command.
 
-Update : 4.5
+4.5
 * Implemented to redefine visual area highlight groups whenever the color
   scheme is loaded.
 * Updated |g:DiffUnit| and |g:DiffColors| options to reflect those updated in
@@ -208,21 +213,21 @@ Update : 4.5
     numbers of matching colors, depending on the loaded color scheme.
   - Added a list of your favorite highlight groups in |g:DiffColors| option.
 
-Update : 4.4
+4.4
 * Enhanced to make diff units easier to read when "indent-heuristic" is
   specified in the 'diffopt' option.
 * Fixed some defects.
 
-Update : 4.3
+4.3
 * Updated to check a new WinClosed event (patch-8.2.3591) to appropriately
   clear the selected range or area and reset its differences when a window is
   closed.
 
-Update : 4.2
+4.2
 * Changed `:VDiffoff` command to check the current cursor position and find
   which of two selected area is to be cleared in the same window.
 
-Update : 4.1
+4.1
 * Added the keymaps which correspond to the `:VDiffthis`, `:VDiffoff`, and
   `:VDiffupdate` commands.
 * Added a custom operator which can select the motion and text object area by
@@ -234,21 +239,21 @@ Update : 4.1
 * Added the diffchar's keymaps which jump cursor to the start/end position of
   the next/previous diff unit.
 
-Update : 4.0
+4.0
 * Added `:VDiffthis`, `:VDiffoff`, and `:VDiffupdate` commands to select the
   Visual area to be compared as a single combined line or multiple separate
   lines.
 * Removed to use Conceal and Sign features in `:Diffthis` command.
 
-Update : 3.2
+3.2
 * Changed to use |hl-CursorLine|, instead of underline and '-' in the fold
   column, to indicate the selected lines.
 
-Update : 3.1
+3.1
 * Set a plugin specific expression to 'diffexpr' option while spot diff'ed to
   disable a new internal diff (patch-8.1.360).
 
-Update : 3.0
+3.0
 * Disable a new internal diff in 'diffopt' option (patch-8.1.360) to prevent
   unselected lines to be incorrectly diff'ed. And make this plugin work well
   even if an external diff command is not available.
@@ -258,20 +263,20 @@ Update : 3.0
 * Support new iwhiteall and iwhiteeol of 'diffopt' option.
 * Removed a support for vim version 7.x.
 
-Update : 2.2
+2.2
 * Added `:Diffupdate` command.
 
-Update : 2.1
+2.1
 * The selected lines are all underlined using sign feature, in addition to a
   '-' in the fold column, to make them more visible.
 * Fixed some defects.
 
-Update : 2.0
+2.0
 * `:Diffthis` indicates the selected lines with a '-' in the fold column.
 * `:Diffthis` always highlighted other lines than selected with |hl-Conceal|,
   but `!` is required as optionally.
 
-Update : 1.1
+1.1
 * `:Diffthis` highlights other lines than selected with |hl-Conceal|, instead
   of showing selected lines with sign feature.
 * `:Diffthis` and `:Diffoff` try to repair any diff mode mismatch, instead of
